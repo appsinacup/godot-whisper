@@ -26,6 +26,8 @@ env.Append(
         "_GNU_SOURCE",
         "WHISPER_SHARED",
         "GGML_SHARED",
+        'GGML_VERSION=\\"0.9.8\\"',
+        'GGML_COMMIT=\\"v1.8.4\\"',
     ]
 )
 
@@ -49,9 +51,11 @@ sources = [Glob("src/*.cpp")]
 sources.extend([Glob("thirdparty/libsamplerate/src/*.c")])
 
 # ── ggml core (platform-independent) ─────────────────────────────────────────
+# ggml.c and ggml.cpp share the same base name → SCons would produce the same
+# object file.  Compile the .cpp variant with an explicit unique object name.
 ggml_core_sources = [
     ggml_src + "/ggml.c",
-    ggml_src + "/ggml.cpp",
+    env.Object(ggml_src + "/ggml_cpp.os", ggml_src + "/ggml.cpp"),
     ggml_src + "/ggml-alloc.c",
     ggml_src + "/ggml-backend.cpp",
     ggml_src + "/ggml-backend-reg.cpp",
@@ -63,9 +67,10 @@ ggml_core_sources = [
 sources.extend(ggml_core_sources)
 
 # ── ggml-cpu backend (always needed) ─────────────────────────────────────────
+# Same base-name conflict: ggml-cpu.c / ggml-cpu.cpp
 cpu_sources = [
     cpu_dir + "/ggml-cpu.c",
-    cpu_dir + "/ggml-cpu.cpp",
+    env.Object(cpu_dir + "/ggml-cpu_cpp.os", cpu_dir + "/ggml-cpu.cpp"),
     cpu_dir + "/repack.cpp",
     cpu_dir + "/hbm.cpp",
     cpu_dir + "/quants.c",
@@ -124,11 +129,12 @@ if env["platform"] in ["macos", "ios"]:
         ]
     )
     env.Append(CPPPATH=[metal_dir])
+    # ggml-metal-device has both .cpp and .m — give the .m an explicit object name
     metal_sources = [
         metal_dir + "/ggml-metal.cpp",
         metal_dir + "/ggml-metal-common.cpp",
         metal_dir + "/ggml-metal-device.cpp",
-        metal_dir + "/ggml-metal-device.m",
+        env.Object(metal_dir + "/ggml-metal-device_m.os", metal_dir + "/ggml-metal-device.m"),
         metal_dir + "/ggml-metal-context.m",
         metal_dir + "/ggml-metal-ops.cpp",
     ]
