@@ -28,6 +28,7 @@ env.Append(
         "GGML_SHARED",
         'GGML_VERSION=\\"0.9.8\\"',
         'GGML_COMMIT=\\"v1.8.4\\"',
+        'WHISPER_VERSION=\\"1.8.4\\"',
     ]
 )
 
@@ -55,7 +56,7 @@ sources.extend([Glob("thirdparty/libsamplerate/src/*.c")])
 # object file.  Compile the .cpp variant with an explicit unique object name.
 ggml_core_sources = [
     ggml_src + "/ggml.c",
-    env.Object(ggml_src + "/ggml_cpp.os", ggml_src + "/ggml.cpp"),
+    env.SharedObject(ggml_src + "/ggml_cpp", ggml_src + "/ggml.cpp"),
     ggml_src + "/ggml-alloc.c",
     ggml_src + "/ggml-backend.cpp",
     ggml_src + "/ggml-backend-reg.cpp",
@@ -70,7 +71,7 @@ sources.extend(ggml_core_sources)
 # Same base-name conflict: ggml-cpu.c / ggml-cpu.cpp
 cpu_sources = [
     cpu_dir + "/ggml-cpu.c",
-    env.Object(cpu_dir + "/ggml-cpu_cpp.os", cpu_dir + "/ggml-cpu.cpp"),
+    env.SharedObject(cpu_dir + "/ggml-cpu_cpp", cpu_dir + "/ggml-cpu.cpp"),
     cpu_dir + "/repack.cpp",
     cpu_dir + "/hbm.cpp",
     cpu_dir + "/quants.c",
@@ -134,7 +135,7 @@ if env["platform"] in ["macos", "ios"]:
         metal_dir + "/ggml-metal.cpp",
         metal_dir + "/ggml-metal-common.cpp",
         metal_dir + "/ggml-metal-device.cpp",
-        env.Object(metal_dir + "/ggml-metal-device_m.os", metal_dir + "/ggml-metal-device.m"),
+        env.SharedObject(metal_dir + "/ggml-metal-device_m", metal_dir + "/ggml-metal-device.m"),
         metal_dir + "/ggml-metal-context.m",
         metal_dir + "/ggml-metal-ops.cpp",
     ]
