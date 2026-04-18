@@ -4,18 +4,18 @@
 </p>
 
 <p align="center">
-	<a href="https://github.com/V-Sekai/godot-whisper/actions/workflows/runner.yml">
-        <img src="https://github.com/V-Sekai/godot-whisper/actions/workflows/runner.yml/badge.svg?branch=main"
+	<a href="https://github.com/appsinacup/godot-whisper/actions/workflows/runner.yml">
+        <img src="https://github.com/appsinacup/godot-whisper/actions/workflows/runner.yml/badge.svg?branch=main"
             alt="chat on Discord"></a>
-    <a href="https://github.com/ggerganov/whisper.cpp" alt="Whisper CPP">
-        <img src="https://img.shields.io/badge/WhisperCPP-v1.5.1-%23478cbf?logoColor=white" /></a>
+    <a href="https://github.com/ggml-org/whisper.cpp" alt="Whisper CPP">
+        <img src="https://img.shields.io/badge/WhisperCPP-v1.8.4-%23478cbf?logoColor=white" /></a>
     <a href="https://github.com/godotengine/godot-cpp" alt="Godot Version">
         <img src="https://img.shields.io/badge/Godot-v4.1-%23478cbf?logo=godot-engine&logoColor=white" /></a>
-    <a href="https://github.com/V-Sekai/godot-whisper/graphs/contributors" alt="Contributors">
-        <img src="https://img.shields.io/github/contributors/V-Sekai/godot-whisper" /></a>
-    <a href="https://github.com/V-Sekai/godot-whisper/pulse" alt="Activity">
-        <img src="https://img.shields.io/github/commit-activity/m/V-Sekai/godot-whisper" /></a>
-    <a href="https://discord.gg/H3s3PD49XC">
+    <a href="https://github.com/appsinacup/godot-whisper/graphs/contributors" alt="Contributors">
+        <img src="https://img.shields.io/github/contributors/appsinacup/godot-whisper" /></a>
+    <a href="https://github.com/appsinacup/godot-whisper/pulse" alt="Activity">
+        <img src="https://img.shields.io/github/commit-activity/m/appsinacup/godot-whisper" /></a>
+    <a href="https://discord.gg/v649emcpAu">
         <img src="https://img.shields.io/discord/1138836561102897172?logo=discord"
             alt="Chat on Discord"></a>
 </p>
@@ -34,7 +34,37 @@
 - Audio transcribe with recorded audio.
 - Runs on separate thread.
 - Metal for Apple devices.
-- OpenCL for rest.
+- Vulkan for Windows/Linux/Android.
+- WebGPU for web builds.
+- Voice Activity Detection (VAD).
+- Flash Attention (enabled by default).
+
+## Platform & Backend Status
+
+| Platform | Backend | Status | Notes |
+|----------|---------|--------|-------|
+| **macOS** | Metal + Accelerate | ✅ Supported | GPU-accelerated via Metal |
+| **iOS** | Metal + Accelerate | ✅ Supported | GPU-accelerated via Metal |
+| **Windows** | Vulkan | ✅ Supported | Cross-vendor GPU (AMD, NVIDIA, Intel) |
+| **Linux** | Vulkan | ✅ Supported | Cross-vendor GPU (AMD, NVIDIA, Intel) |
+| **Android** | Vulkan | ✅ Supported | Mobile GPU acceleration |
+| **Web** | WebGPU | ✅ Supported | GPU acceleration in browsers |
+| **Web** | CPU fallback | ✅ Supported | WASM, no GPU needed |
+| **macOS/iOS** | CoreML | ⬜ Planned | Apple Neural Engine acceleration |
+| **Windows/Linux** | CUDA | ⬜ Planned | NVIDIA-specific, faster than Vulkan |
+| **Windows/Linux** | OpenCL (CLBlast) | ❌ Removed | Replaced by Vulkan |
+
+### Feature Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Realtime transcription | ✅ | Microphone capture + transcribe |
+| Audio file transcription | ✅ | WAV file transcribe |
+| Threaded processing | ✅ | Runs on separate thread |
+| Voice Activity Detection (VAD) | ⬜ Planned | Silero VAD built into whisper.cpp |
+| Flash Attention | ✅ | Enabled by default since v1.8.0 |
+| Model downloading in editor | ✅ | Download models from Godot editor |
+| Quantized models | ✅ | Q5_0, Q5_1, Q8_0 support |
 
 ## How to install
 
@@ -102,8 +132,8 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ughuuu"><img src="https://avatars.githubusercontent.com/u/2369380?v=4?s=100" width="100px;" alt="Dragos Daian"/><br /><sub><b>Dragos Daian</b></sub></a><br /><a href="https://github.com/V-Sekai/v-sekai.whisper/commits?author=Ughuuu" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://chibifire.com"><img src="https://avatars.githubusercontent.com/u/32321?v=4?s=100" width="100px;" alt="K. S. Ernest (iFire) Lee"/><br /><sub><b>K. S. Ernest (iFire) Lee</b></sub></a><br /><a href="https://github.com/V-Sekai/v-sekai.whisper/commits?author=fire" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ughuuu"><img src="https://avatars.githubusercontent.com/u/2369380?v=4?s=100" width="100px;" alt="Dragos Daian"/><br /><sub><b>Dragos Daian</b></sub></a><br /><a href="https://github.com/appsinacup/appsinacup.whisper/commits?author=Ughuuu" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://chibifire.com"><img src="https://avatars.githubusercontent.com/u/32321?v=4?s=100" width="100px;" alt="K. S. Ernest (iFire) Lee"/><br /><sub><b>K. S. Ernest (iFire) Lee</b></sub></a><br /><a href="https://github.com/appsinacup/appsinacup.whisper/commits?author=fire" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
