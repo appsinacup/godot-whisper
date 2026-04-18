@@ -1,0 +1,19 @@
+[submodule "thirdparty/godot-cpp"]
+	path = thirdparty/godot-cpp
+	url = https://github.com/godotengine/godot-cpp.git
+	branch = 4.1
+[submodule "thirdparty/whisper.cpp"]
+	path = thirdparty/whisper.cpp
+	url = https://github.com/ggml-org/whisper.cpp.git
+[submodule "thirdparty/clblast"]
+	path = thirdparty/clblast
+	url = https://github.com/CNugteren/CLBlast.git
+[submodule "thirdparty/opencl_headers"]
+	path = thirdparty/opencl_headers
+	url = https://github.com/KhronosGroup/OpenCL-Headers.git
+[submodule "thirdparty/opencl_icd_loader"]
+	path = thirdparty/opencl_icd_loader
+	url = https://github.com/KhronosGroup/OpenCL-ICD-Loader.git
+[submodule "thirdparty/libsamplerate"]
+	path = thirdparty/libsamplerate
+	url = https://github.com/libsndfile/libsamplerate.git
