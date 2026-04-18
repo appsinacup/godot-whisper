@@ -1,2 +1,0 @@
-include README.md setup.py src/*.pyx
-include samples/*.py
