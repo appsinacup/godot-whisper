@@ -13,7 +13,7 @@ option_button = NodePath("OptionButton")
 
 [node name="OptionButton" type="OptionButton" parent="."]
 layout_mode = 2
-item_count = 11
+item_count = 16
 selected = 0
 popup/item_0/text = "tiny.en"
 popup/item_0/id = 0
@@ -37,6 +37,16 @@ popup/item_9/text = "large-v2"
 popup/item_9/id = 9
 popup/item_10/text = "large-v3"
 popup/item_10/id = 10
+popup/item_11/text = "large-v3-turbo"
+popup/item_11/id = 11
+popup/item_12/text = "large-v3-turbo-q5_0"
+popup/item_12/id = 12
+popup/item_13/text = "large-v3-q5_0"
+popup/item_13/id = 13
+popup/item_14/text = "small.en-q5_1"
+popup/item_14/id = 14
+popup/item_15/text = "medium.en-q5_0"
+popup/item_15/id = 15
 
 [node name="Button" type="Button" parent="."]
 layout_mode = 2

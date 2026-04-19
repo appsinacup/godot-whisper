@@ -87,14 +87,22 @@ cpu_sources = [
 
 # ── Architecture-specific CPU files ──────────────────────────────────────────
 if env["platform"] in ["macos", "ios"]:
-    # Apple → ARM (Apple Silicon) or x86 (older Intel Macs)
+    # Apple universal: include both ARM and x86 — guarded by #if defined(...)
     cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
     cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
     cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
+    cpu_sources.append(cpu_dir + "/arch/x86/quants.c")
+    cpu_sources.append(cpu_dir + "/arch/x86/repack.cpp")
+    cpu_sources.append(cpu_dir + "/arch/x86/cpu-feats.cpp")
 elif env["platform"] == "android":
-    cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
-    cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
-    cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
+    if env["arch"] in ["arm64", "arm32"]:
+        cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
+        cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
+        cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
+    else:
+        cpu_sources.append(cpu_dir + "/arch/x86/quants.c")
+        cpu_sources.append(cpu_dir + "/arch/x86/repack.cpp")
+        cpu_sources.append(cpu_dir + "/arch/x86/cpu-feats.cpp")
 elif env["platform"] == "web":
     cpu_sources.append(cpu_dir + "/arch/wasm/quants.c")
 elif env["platform"] in ["linux", "windows"]:
@@ -142,28 +150,72 @@ if env["platform"] in ["macos", "ios"]:
     sources.extend(metal_sources)
 
 elif env["platform"] == "web":
-    # Web: CPU-only (no GPU backend available for now)
-    pass
+    # ── Web: WebGPU (opt-in) or CPU-only ─────────────────────────────────
+    # WebGPU requires emscripten 4.0+ with emdawnwebgpu port.
+    # Godot's default emscripten is 3.1.62, so WebGPU is opt-in.
+    # Enable with: scons webgpu=yes (or env WEBGPU=yes)
+    _use_webgpu = ARGUMENTS.get("webgpu", os.environ.get("WEBGPU", "no")) in ["yes", "true", "1"]
+
+    if _use_webgpu:
+        webgpu_dir = ggml_src + "/ggml-webgpu"
+        webgpu_shader_dir = webgpu_dir + "/wgsl-shaders"
+        webgpu_gen_dir = "gen/webgpu_shaders"
+
+        # Generate WGSL shader header using embed_wgsl.py
+        os.makedirs(webgpu_gen_dir, exist_ok=True)
+        embed_script = webgpu_shader_dir + "/embed_wgsl.py"
+        shader_header = webgpu_gen_dir + "/ggml-wgsl-shaders.hpp"
+        import glob as _wgsl_glob
+        wgsl_files = _wgsl_glob.glob(webgpu_shader_dir + "/*.wgsl")
+        needs_regen = not os.path.exists(shader_header) or any(
+            os.path.getmtime(f) > os.path.getmtime(shader_header)
+            for f in wgsl_files + [embed_script]
+        )
+        if needs_regen:
+            import subprocess as _sp
+            _sp.run([sys.executable, embed_script,
+                     "--input_dir", webgpu_shader_dir,
+                     "--output_file", shader_header], check=True)
+
+        env.Append(CPPDEFINES=["GGML_USE_WEBGPU"])
+        env.Append(CPPPATH=[webgpu_dir, webgpu_gen_dir])
+        # Emscripten flags for Dawn WebGPU port
+        env.Append(CCFLAGS=["--use-port=emdawnwebgpu", "-fexceptions"])
+        env.Append(LINKFLAGS=["--use-port=emdawnwebgpu", "-sASYNCIFY", "-fexceptions"])
+        sources.append(webgpu_dir + "/ggml-webgpu.cpp")
+    # else: CPU-only (no additional flags needed)
 
 else:
-    # ── Linux / Windows / Android: CLBlast + OpenCL ──────────────────────────
-    # Enable C++ exceptions needed by CLBlast
+    # ── Linux / Windows / Android: OpenCL (self-contained, no CLBlast) ───────
     if env["platform"] == "windows":
         env.Append(CCFLAGS=["/EHsc"])
     else:
         env.Append(CCFLAGS=["-fexceptions"])
 
+    # --- Embed OpenCL kernels at build time (avoids runtime .cl file loading) -
+    import glob as _glob
+    opencl_kernel_dir = opencl_dir + "/kernels"
+    opencl_gen_dir = "gen/opencl_kernels"
+    os.makedirs(opencl_gen_dir, exist_ok=True)
+    for cl_path in sorted(_glob.glob(opencl_kernel_dir + "/*.cl")):
+        cl_name = os.path.basename(cl_path)
+        out_path = os.path.join(opencl_gen_dir, cl_name + ".h")
+        # Regenerate only if source is newer than output
+        if not os.path.exists(out_path) or os.path.getmtime(cl_path) > os.path.getmtime(out_path):
+            with open(cl_path, "r") as f_in, open(out_path, "w") as f_out:
+                for line in f_in:
+                    f_out.write('R"({})"\n'.format(line))
+
     env.Prepend(CPPPATH=[
         "thirdparty/opencl_headers",
-        "thirdparty/clblast/include",
-        "thirdparty/clblast/src",
         opencl_dir,
+        opencl_gen_dir,
     ])
     env.Append(
         CPPDEFINES=[
             "GGML_USE_OPENCL",
-            "OPENCL_API",
-            "USE_ICD_LOADER",
+            "GGML_OPENCL_EMBED_KERNELS",
+            "GGML_OPENCL_SOA_Q",
         ]
     )
 
@@ -172,7 +224,7 @@ else:
 
     opencl_include_dir = os.environ.get("OpenCL_INCLUDE_DIR")
     if opencl_include_dir:
-        env.Append(CPPDEFINES=[opencl_include_dir])
+        env.Append(CPPPATH=[opencl_include_dir])
 
     opencl_library = os.environ.get("OpenCL_LIBRARY")
     if opencl_library:
@@ -182,43 +234,101 @@ else:
     elif env["platform"] == "linux":
         env.Append(LIBS=[":libOpenCL.so.1"])
 
-    # ggml-opencl backend (new v1.8.4 location)
+    # ggml-opencl backend (self-contained in v1.8.4)
     sources.append(opencl_dir + "/ggml-opencl.cpp")
 
-    # CLBlast sources
-    clblast_sources = [
-        "thirdparty/clblast/src/database/database.cpp",
-        "thirdparty/clblast/src/routines/common.cpp",
-        "thirdparty/clblast/src/utilities/compile.cpp",
-        "thirdparty/clblast/src/utilities/clblast_exceptions.cpp",
-        "thirdparty/clblast/src/utilities/timing.cpp",
-        "thirdparty/clblast/src/utilities/utilities.cpp",
-        "thirdparty/clblast/src/api_common.cpp",
-        "thirdparty/clblast/src/cache.cpp",
-        "thirdparty/clblast/src/kernel_preprocessor.cpp",
-        "thirdparty/clblast/src/routine.cpp",
-        "thirdparty/clblast/src/tuning/configurations.cpp",
-        "thirdparty/clblast/src/clblast.cpp",
-        "thirdparty/clblast/src/clblast_c.cpp",
-        "thirdparty/clblast/src/tuning/tuning_api.cpp",
-    ]
+    # ── Vulkan (auto-enabled when glslc is available) ──────────────────────
+    # Override with: scons vulkan=no (or env VULKAN=no) to disable
+    import shutil as _shutil
+    vulkan_opt = ARGUMENTS.get("vulkan", os.environ.get("VULKAN", "auto"))
+    _glslc_path = None
 
-    databases = [
-        "copy", "pad", "padtranspose", "transpose", "xaxpy", "xdot",
-        "xgemm", "xgemm_direct", "xgemv", "xgemv_fast", "xgemv_fast_rot",
-        "xger", "invert", "gemm_routine", "trsv_routine", "xconvgemm",
-    ]
-    for db in databases:
-        clblast_sources.append(
-            "thirdparty/clblast/src/database/kernels/{0}/{0}.cpp".format(db)
+    _vulkan_sdk = os.environ.get("VULKAN_SDK", "")
+    if _vulkan_sdk:
+        _candidate = os.path.join(_vulkan_sdk, "bin", "glslc")
+        if sys.platform == "win32":
+            _candidate += ".exe"
+        if os.path.exists(_candidate):
+            _glslc_path = _candidate
+    if not _glslc_path:
+        _glslc_path = _shutil.which("glslc")
+
+    _use_vulkan = False
+    if vulkan_opt in ["yes", "true", "1"]:
+        _use_vulkan = True
+        if not _glslc_path:
+            print("ERROR: vulkan=yes but glslc not found. Install Vulkan SDK.")
+            Exit(1)
+    elif vulkan_opt == "auto":
+        _use_vulkan = _glslc_path is not None
+
+    if _use_vulkan:
+        print("Vulkan backend enabled (glslc: {})".format(_glslc_path))
+        vulkan_dir = ggml_src + "/ggml-vulkan"
+        vulkan_shader_src = vulkan_dir + "/vulkan-shaders"
+        vulkan_gen_dir = "gen/vulkan_shaders"
+        vulkan_spv_dir = vulkan_gen_dir + "/spv"
+        vulkan_gen_tool_src = vulkan_shader_src + "/vulkan-shaders-gen.cpp"
+        vulkan_header_path = vulkan_gen_dir + "/ggml-vulkan-shaders.hpp"
+
+        if sys.platform == "win32":
+            vulkan_gen_tool_bin = "gen/vulkan-shaders-gen.exe"
+        else:
+            vulkan_gen_tool_bin = "gen/vulkan-shaders-gen"
+
+        os.makedirs(vulkan_gen_dir, exist_ok=True)
+        os.makedirs(vulkan_spv_dir, exist_ok=True)
+
+        # Build the shader gen tool with host compiler
+        _host_cxx = os.environ.get("HOST_CXX", "c++" if sys.platform != "win32" else "cl.exe")
+        if sys.platform == "win32":
+            _host_compile_cmd = "{} /std:c++17 /O2 /EHsc $SOURCE /Fe$TARGET".format(_host_cxx)
+        else:
+            _host_compile_cmd = "{} -std=c++17 -O2 -pthread $SOURCE -o $TARGET".format(_host_cxx)
+
+        vulkan_tool = env.Command(
+            vulkan_gen_tool_bin,
+            vulkan_gen_tool_src,
+            _host_compile_cmd
         )
 
-    sources.extend(clblast_sources)
-    sources.extend(Glob("thirdparty/clblast/src/routines/level1/*.cpp"))
-    sources.extend(Glob("thirdparty/clblast/src/routines/level2/*.cpp"))
-    sources.extend(Glob("thirdparty/clblast/src/routines/level3/*.cpp"))
-    sources.extend(Glob("thirdparty/clblast/src/routines/levelx/*.cpp"))
-    sources.extend(Glob("thirdparty/clblast/src/tuners/*.cpp"))
+        # Generate header with extern declarations (no glslc needed, fast)
+        vulkan_hdr = env.Command(
+            vulkan_header_path,
+            vulkan_tool,
+            "./{tool} --output-dir {spvdir} --target-hpp $TARGET".format(
+                tool=vulkan_gen_tool_bin, spvdir=vulkan_spv_dir)
+        )
+
+        # Compile each .comp shader → .cpp with embedded SPIR-V
+        import glob as _vk_glob
+        for _comp_path in sorted(_vk_glob.glob(vulkan_shader_src + "/*.comp")):
+            _comp_name = os.path.basename(_comp_path)
+            _cpp_out = os.path.join(vulkan_gen_dir, _comp_name + ".cpp")
+            _shader_cmd = env.Command(
+                _cpp_out,
+                _comp_path,
+                "./{tool} --glslc {glslc} --source $SOURCE "
+                "--output-dir {spvdir} --target-hpp {hdr} --target-cpp $TARGET".format(
+                    tool=vulkan_gen_tool_bin, glslc=_glslc_path,
+                    spvdir=vulkan_spv_dir, hdr=vulkan_header_path)
+            )
+            env.Depends(_shader_cmd, [vulkan_tool, vulkan_hdr])
+            sources.append(_cpp_out)
+
+        env.Append(CPPDEFINES=["GGML_USE_VULKAN"])
+        env.Append(CPPPATH=[vulkan_dir, vulkan_gen_dir])
+
+        if _vulkan_sdk:
+            env.Append(CPPPATH=[os.path.join(_vulkan_sdk, "include")])
+            env.Append(LIBPATH=[os.path.join(_vulkan_sdk, "lib")])
+
+        if env["platform"] == "windows":
+            env.Append(LIBS=["vulkan-1"])
+        else:
+            env.Append(LIBS=["vulkan"])
+
+        sources.append(vulkan_dir + "/ggml-vulkan.cpp")
 
 # ── Build shared library ─────────────────────────────────────────────────────
 if env["platform"] in ["macos", "ios"]:

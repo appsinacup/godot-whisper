@@ -10,10 +10,11 @@ func _process(_delta):
 var completed_text := ""
 var partial_text := ""
 
-func _on_capture_stream_to_text_transcribed_msg(is_partial, new_text):
-	if is_partial == true:
+## is_complete: true when the sentence is finalized, false when still in progress.
+func _on_capture_stream_to_text_transcribed_msg(is_complete, new_text):
+	if is_complete:
 		completed_text += new_text
 		partial_text = ""
 	else:
-		if new_text!="":
+		if new_text != "":
 			partial_text = new_text

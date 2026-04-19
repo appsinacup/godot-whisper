@@ -341,12 +341,55 @@ void SpeechToText::_load_model() {
 	}
 	whisper_context_params context_params = whisper_context_default_params();
 	context_params.use_gpu = _is_use_gpu();
+	context_params.flash_attn = flash_attn;
 	context_instance = whisper_init_from_buffer_with_params((void *)(data.ptr()), data.size(), context_params);
+}
+
+void SpeechToText::_load_vad_model() {
+	whisper_vad_free(vad_context);
+	vad_context = nullptr;
+	if (vad_model_path.is_empty()) {
+		return;
+	}
+	whisper_vad_context_params vad_ctx_params = whisper_vad_default_context_params();
+	vad_ctx_params.use_gpu = _is_use_gpu();
+	vad_context = whisper_vad_init_from_file_with_params(vad_model_path.utf8().get_data(), vad_ctx_params);
+	if (!vad_context) {
+		ERR_PRINT("Failed to load VAD model from: " + vad_model_path);
+	}
+}
+
+void SpeechToText::set_vad_model_path(String p_path) {
+	vad_model_path = p_path;
+	_load_vad_model();
+}
+
+String SpeechToText::get_vad_model_path() {
+	return vad_model_path;
+}
+
+void SpeechToText::set_enable_vad(bool p_enable) {
+	enable_vad = p_enable;
+}
+
+bool SpeechToText::get_enable_vad() {
+	return enable_vad;
+}
+
+void SpeechToText::set_flash_attn(bool p_enable) {
+	flash_attn = p_enable;
+	_load_model();
+}
+
+bool SpeechToText::get_flash_attn() {
+	return flash_attn;
 }
 
 SpeechToText::~SpeechToText() {
 	whisper_free(context_instance);
 	context_instance = nullptr;
+	whisper_vad_free(vad_context);
+	vad_context = nullptr;
 }
 
 PackedFloat32Array SpeechToText::resample(PackedVector2Array buffer, SpeechToText::InterpolatorType interpolator_type) {
@@ -397,6 +440,30 @@ bool SpeechToText::voice_activity_detection(PackedFloat32Array buffer) {
 	return false;
 }
 
+Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
+	Array result;
+	if (!vad_context) {
+		ERR_PRINT("VAD model not loaded. Set vad_model_path first.");
+		return result;
+	}
+	whisper_vad_params vad_params = whisper_vad_default_params();
+	whisper_vad_segments *segments = whisper_vad_segments_from_samples(
+			vad_context, vad_params, buffer.ptr(), buffer.size());
+	if (!segments) {
+		ERR_PRINT("Failed to detect speech segments.");
+		return result;
+	}
+	int n = whisper_vad_segments_n_segments(segments);
+	for (int i = 0; i < n; i++) {
+		Dictionary seg;
+		seg["start"] = whisper_vad_segments_get_segment_t0(segments, i);
+		seg["end"] = whisper_vad_segments_get_segment_t1(segments, i);
+		result.push_back(seg);
+	}
+	whisper_vad_free_segments(segments);
+	return result;
+}
+
 Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx) {
 	Array return_value;
 	whisper_full_params whisper_params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
@@ -409,6 +476,12 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	whisper_params.max_tokens = _get_max_tokens();
 	whisper_params.entropy_thold = _get_entropy_threshold();
 	whisper_params.initial_prompt = initial_prompt.utf8().get_data();
+
+	// Enable Silero VAD to auto-strip silence (prevents hallucinations)
+	if (enable_vad && !vad_model_path.is_empty()) {
+		whisper_params.vad = true;
+		whisper_params.vad_model_path = vad_model_path.utf8().get_data();
+	}
 
 	if (!context_instance) {
 		ERR_PRINT("Context instance is null");
@@ -452,8 +525,15 @@ void SpeechToText::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_language", "language"), &SpeechToText::set_language);
 	ClassDB::bind_method(D_METHOD("get_language_model"), &SpeechToText::get_language_model);
 	ClassDB::bind_method(D_METHOD("set_language_model", "model"), &SpeechToText::set_language_model);
+	ClassDB::bind_method(D_METHOD("get_vad_model_path"), &SpeechToText::get_vad_model_path);
+	ClassDB::bind_method(D_METHOD("set_vad_model_path", "path"), &SpeechToText::set_vad_model_path);
+	ClassDB::bind_method(D_METHOD("get_enable_vad"), &SpeechToText::get_enable_vad);
+	ClassDB::bind_method(D_METHOD("set_enable_vad", "enable"), &SpeechToText::set_enable_vad);
+	ClassDB::bind_method(D_METHOD("get_flash_attn"), &SpeechToText::get_flash_attn);
+	ClassDB::bind_method(D_METHOD("set_flash_attn", "enable"), &SpeechToText::set_flash_attn);
 	ClassDB::bind_method(D_METHOD("transcribe", "buffer", "initial_prompt", "audio_ctx"), &SpeechToText::transcribe);
 	ClassDB::bind_method(D_METHOD("voice_activity_detection", "buffer"), &SpeechToText::voice_activity_detection);
+	ClassDB::bind_method(D_METHOD("detect_speech_segments", "buffer"), &SpeechToText::detect_speech_segments);
 	ClassDB::bind_method(D_METHOD("resample", "buffer"), &SpeechToText::resample);
 
 	BIND_ENUM_CONSTANT(SRC_SINC_BEST_QUALITY);
@@ -568,4 +648,7 @@ void SpeechToText::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "language", PROPERTY_HINT_ENUM, "Auto,English,Chinese,German,Spanish,Russian,Korean,French,Japanese,Portuguese,Turkish,Polish,Catalan,Dutch,Arabic,Swedish,Italian,Indonesian,Hindi,Finnish,Vietnamese,Hebrew,Ukrainian,Greek,Malay,Czech,Romanian,Danish,Hungarian,Tamil,Norwegian,Thai,Urdu,Croatian,Bulgarian,Lithuanian,Latin,Maori,Malayalam,Welsh,Slovak,Telugu,Persian,Latvian,Bengali,Serbian,Azerbaijani,Slovenian,Kannada,Estonian,Macedonian,Breton,Basque,Icelandic,Armenian,Nepali,Mongolian,Bosnian,Kazakh,Albanian,Swahili,Galician,Marathi,Punjabi,Sinhala,Khmer,Shona,Yoruba,Somali,Afrikaans,Occitan,Georgian,Belarusian,Tajik,Sindhi,Gujarati,Amharic,Yiddish,Lao,Uzbek,Faroese,Haitian_Creole,Pashto,Turkmen,Nynorsk,Maltese,Sanskrit,Luxembourgish,Myanmar,Tibetan,Tagalog,Malagasy,Assamese,Tatar,Hawaiian,Lingala,Hausa,Bashkir,Javanese,Sundanese,Cantonese"), "set_language", "get_language");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "language_model", PROPERTY_HINT_RESOURCE_TYPE, "WhisperResource"), "set_language_model", "get_language_model");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enable_vad"), "set_enable_vad", "get_enable_vad");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "vad_model_path", PROPERTY_HINT_FILE, "*.bin"), "set_vad_model_path", "get_vad_model_path");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "flash_attn"), "set_flash_attn", "get_flash_attn");
 }

@@ -9,10 +9,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # CPU-only (default, compatible with emscripten 3.1.62)
           - precision: single
             arch: wasm32
+            gpu: cpu
           - precision: double
             arch: wasm32
+            gpu: cpu
+          # WebGPU (requires emscripten 4.0+)
+          - precision: single
+            arch: wasm32
+            gpu: webgpu
+          - precision: double
+            arch: wasm32
+            gpu: webgpu
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,19 +31,31 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: 🔗 GDExtension Build
+      - name: 🔗 GDExtension Build (CPU-only)
+        if: ${{ matrix.gpu == 'cpu' }}
         uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
         with:
           platform: web
           arch: ${{ matrix.arch }}
-          godot-cpp-location: godot-cpp
           float-precision: ${{ matrix.precision }}
           build-target-type: template_release
+
+      - name: 🔗 GDExtension Build (WebGPU)
+        if: ${{ matrix.gpu == 'webgpu' }}
+        uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
+        env:
+          WEBGPU: "yes"
+        with:
+          platform: web
+          arch: ${{ matrix.arch }}
+          float-precision: ${{ matrix.precision }}
+          build-target-type: template_release
+          em_version: "4.0.8"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Godot_Whisper
+          name: Godot_Whisper-web-${{ matrix.gpu }}-${{ matrix.precision }}
           path: |
             ${{ github.workspace }}/bin/**/*.wasm
           if-no-files-found: error

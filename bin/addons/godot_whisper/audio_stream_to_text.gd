@@ -50,35 +50,28 @@ func get_text() -> String:
 		return ""
 
 	var full_text: String = tokens.pop_front()
-	var text := ""
-	for token in tokens:
-		if token["plog"] > 0:
-			continue
-		text += token["text"]
-	text = full_text
 
 	print("Transcribe: " + str((Time.get_ticks_msec() - start_time) / 1000.0))
-	print(text)
-	return _remove_special_characters(text)
+	print(full_text)
+	return _remove_special_characters(full_text)
 
 
 ## Remove special characters from the transcribed text
 func _remove_special_characters(message: String) -> String:
-	var special_characters := [{"start": "[", "end": "]"}, {"start": "<", "end": ">"}]
+	var special_characters := [{"start": "[", "end": "]"}, {"start": "<", "end": ">"}, {"start": "♪", "end": "♪"}]
 	for special_character in special_characters:
 		while message.find(special_character["start"]) != -1:
 			var begin_character := message.find(special_character["start"])
-			var end_character := message.find(special_character["end"])
+			var end_character := message.find(special_character["end"], begin_character + 1)
 			if end_character != -1:
 				message = message.substr(0, begin_character) + message.substr(end_character + 1)
+			else:
+				break
 
-	var hallucinatory_character := [". you."]
-	for special_character in hallucinatory_character:
-		while message.find(special_character) != -1:
-			var begin_character := message.find(special_character)
-			var end_character := begin_character + len(special_character)
-			message = message.substr(0, begin_character) + message.substr(end_character + 1)
-	return message
+	var hallucinatory_characters := [". you.", ". You."]
+	for hallucination in hallucinatory_characters:
+		message = message.replace(hallucination, "")
+	return message.strip_edges()
 
 
 ## Get configuration warnings for the node

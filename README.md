@@ -30,41 +30,104 @@
 
 ## Features
 
-- Realtime audio transcribe.
-- Audio transcribe with recorded audio.
-- Runs on separate thread.
-- Metal for Apple devices.
-- Vulkan for Windows/Linux/Android.
-- WebGPU for web builds.
-- Voice Activity Detection (VAD).
-- Flash Attention (enabled by default).
+- **Realtime audio transcription** — microphone capture and live transcription on a separate thread.
+- **Offline audio transcription** — transcribe pre-recorded WAV files directly in the editor.
+- **GPU acceleration** — Metal (macOS/iOS), OpenCL + Vulkan (Windows/Linux/Android), WebGPU (Web).
+- **Flash Attention** — memory-efficient attention enabled by default, configurable via `flash_attn` property.
+- **Voice Activity Detection (VAD)** — Silero neural network VAD auto-strips silence and prevents hallucinations.
+- **Quantized models** — Q5_0, Q5_1, Q8_0 support for smaller file sizes with minimal quality loss.
+- **99 languages** — automatic language detection or manual selection via the `language` property.
+- **Model downloader** — download models directly from the Godot editor.
 
-## Platform & Backend Status
+## Platforms
 
-| Platform | Backend | Status | Notes |
-|----------|---------|--------|-------|
-| **macOS** | Metal + Accelerate | ✅ Supported | GPU-accelerated via Metal |
-| **iOS** | Metal + Accelerate | ✅ Supported | GPU-accelerated via Metal |
-| **Windows** | Vulkan | ✅ Supported | Cross-vendor GPU (AMD, NVIDIA, Intel) |
-| **Linux** | Vulkan | ✅ Supported | Cross-vendor GPU (AMD, NVIDIA, Intel) |
-| **Android** | Vulkan | ✅ Supported | Mobile GPU acceleration |
-| **Web** | WebGPU | ✅ Supported | GPU acceleration in browsers |
-| **Web** | CPU fallback | ✅ Supported | WASM, no GPU needed |
-| **macOS/iOS** | CoreML | ⬜ Planned | Apple Neural Engine acceleration |
-| **Windows/Linux** | CUDA | ⬜ Planned | NVIDIA-specific, faster than Vulkan |
-| **Windows/Linux** | OpenCL (CLBlast) | ❌ Removed | Replaced by Vulkan |
+| Platform | GPU Backend | Notes |
+|----------|-------------|-------|
+| **macOS** | Metal + Accelerate | GPU-accelerated via Metal |
+| **iOS** | Metal + Accelerate | GPU-accelerated via Metal |
+| **Windows** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
+| **Linux** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
+| **Android** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
+| **Web** | WebGPU | `scons webgpu=yes` — requires Emscripten 4.0+ (Godot default is 3.1.62). CPU-only without it |
 
-### Feature Status
+## Video Tutorial
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Realtime transcription | ✅ | Microphone capture + transcribe |
-| Audio file transcription | ✅ | WAV file transcribe |
-| Threaded processing | ✅ | Runs on separate thread |
-| Voice Activity Detection (VAD) | ⬜ Planned | Silero VAD built into whisper.cpp |
-| Flash Attention | ✅ | Enabled by default since v1.8.0 |
-| Model downloading in editor | ✅ | Download models from Godot editor |
-| Quantized models | ✅ | Q5_0, Q5_1, Q8_0 support |
+[![Comparison](https://img.youtube.com/vi/fAgjNkfBOKs/0.jpg)](https://www.youtube.com/watch?v=fAgjNkfBOKs&t=10s)
+
+## Whisper Models
+
+All OpenAI Whisper models are supported. Load the corresponding `.bin` file — no code changes needed. Models can be downloaded directly in the Godot editor or from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
+
+### Multilingual Models
+
+| Model | Params | Full (f16) | Q8_0 | Q5_0 / Q5_1 | Best for |
+|-------|--------|---:|---:|---:|----------|
+| **tiny** | 39M | 78 MB | 44 MB | 32 MB (q5_1) | Prototyping, low-end devices |
+| **base** | 74M | 148 MB | 82 MB | 60 MB (q5_1) | Mobile, real-time on most devices |
+| **small** | 244M | 488 MB | 264 MB | 190 MB (q5_1) | Good balance of speed and quality |
+| **medium** | 769M | 1.53 GB | 823 MB | 539 MB (q5_0) | High-quality transcription |
+| **large-v1** | 1550M | 3.09 GB | — | — | First large model |
+| **large-v2** | 1550M | 3.09 GB | 1.66 GB | 1.08 GB (q5_0) | Best Whisper v2 |
+| **large-v3** | 1550M | 3.10 GB | — | 1.08 GB (q5_0) | Best multilingual accuracy |
+| **large-v3-turbo** | 809M | 1.62 GB | 874 MB | 574 MB (q5_0) | ⭐ Recommended — fast + accurate |
+
+### English-only Models
+
+English-only models (`.en` suffix) are faster and more accurate for English. Available for tiny through medium:
+
+| Model | Full (f16) | Q8_0 | Q5_1 |
+|-------|---:|---:|---:|
+| **tiny.en** | 78 MB | 44 MB | 32 MB |
+| **base.en** | 148 MB | 82 MB | 60 MB |
+| **small.en** | 488 MB | 264 MB | 190 MB |
+| **medium.en** | 1.53 GB | 823 MB | 539 MB (q5_0) |
+
+### Quantized Models
+
+Quantized models store weights with lower precision, reducing file size with minimal quality loss:
+
+| Format | Bits | Size Reduction |
+|--------|------|---------------|
+| Q8_0 | 8 | ~50% smaller |
+| Q5_1 | 5 | ~65% smaller |
+| Q5_0 | 5 | ~65% smaller |
+
+Available for all model sizes (both multilingual and English-only). Pre-quantized `.bin` files are on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
+
+**Choosing a model:**
+- **English-only** → use `.en` models for better speed and accuracy.
+- **Multilingual** → use models without `.en` suffix and set the `language` property.
+- **Mobile/Web** → use quantized (Q5_0/Q5_1) to reduce download size and memory.
+- **large-v3-turbo** → recommended for most use cases — nearly large-v3 quality at 3× the speed.
+
+## Voice Activity Detection (VAD)
+
+Silero VAD is a neural network that detects speech segments and auto-strips silence during transcription, **preventing hallucinations** from silent audio.
+
+**Setup:**
+1. Download `silero-vad.bin` (~1.9 MB) from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp)
+2. Set `vad_model_path` on the `SpeechToText` node
+3. Set `enable_vad = true`
+
+When enabled, `transcribe()` automatically filters out silence before processing. You can also detect speech segments manually:
+
+```gdscript
+var segments = stt.detect_speech_segments(audio_buffer)
+for seg in segments:
+    print("Speech from %.2fs to %.2fs" % [seg.start, seg.end])
+```
+
+## Flash Attention
+
+Flash Attention reduces memory usage and improves inference speed, especially for longer audio. Enabled by default — disable via the `flash_attn` property on the `SpeechToText` node if needed.
+
+## Supported Languages
+
+The plugin supports **99 languages** via the `Language` enum on the `SpeechToText` node. Set to `Auto` for automatic language detection (multilingual models only).
+
+For best results with English, use English-only models (`.en` suffix). For other languages, use multilingual models and set the `language` property on the `SpeechToText` node.
+
+See the [OpenAI Whisper paper](https://cdn.openai.com/papers/whisper.pdf) for detailed per-language accuracy benchmarks.
 
 ## How to install
 
@@ -74,6 +137,8 @@ Go to a github release, copy paste the addons folder to the samples folder. Rest
 <p align="center">
 <img src="banner_godot_whisper.jpg"/>
 </p>
+
+# How to build
 
 ## Requirements
 
@@ -109,38 +174,3 @@ Go to Project -> Project Settings -> General -> Audio -> Input (Check Advance Se
 You will see a bunch of settings there.
 
 Also, as doing microphone transcribing requires the data to be at a 16000 sampling rate, you can change the audio driver mix rate to 16000: `audio/driver/mix_rate`. This way the resampling won't need to do any work, winning you some valuable 50-100ms for larger audio, but at the price of audio quality.
-
-## Video Tutorial
-
-[![Comparison](https://img.youtube.com/vi/fAgjNkfBOKs/0.jpg)](https://www.youtube.com/watch?v=fAgjNkfBOKs&t=10s)
-
-## How to build
-
-```
-scons target=template_release generate_bindings=no arch=universal precision=single
-rm -rf samples/godot_whisper/addons
-cp -rf bin/addons samples/godot_whisper/addons
-```
-
-## Contributors ✨
-
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ughuuu"><img src="https://avatars.githubusercontent.com/u/2369380?v=4?s=100" width="100px;" alt="Dragos Daian"/><br /><sub><b>Dragos Daian</b></sub></a><br /><a href="https://github.com/appsinacup/appsinacup.whisper/commits?author=Ughuuu" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://chibifire.com"><img src="https://avatars.githubusercontent.com/u/32321?v=4?s=100" width="100px;" alt="K. S. Ernest (iFire) Lee"/><br /><sub><b>K. S. Ernest (iFire) Lee</b></sub></a><br /><a href="https://github.com/appsinacup/appsinacup.whisper/commits?author=fire" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!

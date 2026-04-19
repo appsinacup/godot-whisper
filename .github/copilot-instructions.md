@@ -9,8 +9,7 @@ Godot Whisper is a GDExtension plugin that integrates [whisper.cpp](https://gith
 - **Third-party deps** are git submodules under `thirdparty/`:
   - `whisper.cpp` (v1.8.4, ggml-org/whisper.cpp) — the ML inference engine
   - `godot-cpp` (branch 4.1) — Godot C++ bindings
-  - `clblast` — OpenCL BLAS (used on Linux/Windows/Android for OpenCL backend)
-  - `opencl_headers`, `opencl_icd_loader` — OpenCL support
+  - `opencl_headers`, `opencl_icd_loader` — OpenCL support (headers & ICD loader)
   - `libsamplerate` (0.1.9) — audio resampling
 - After cloning, run `git submodule update --init --recursive`.
 
@@ -32,16 +31,18 @@ The submodule has a new directory structure (changed from the old monolithic lay
 - `ggml/src/` — ggml core (ggml.c, ggml.cpp, ggml-backend.cpp, ggml-alloc.c, …)
 - `ggml/src/ggml-cpu/` — CPU backend (+ arch/ subdirs for arm, x86, wasm, …)
 - `ggml/src/ggml-metal/` — Metal backend (multiple .cpp/.m files)
-- `ggml/src/ggml-opencl/` — OpenCL backend
-- `ggml/src/ggml-vulkan/` — Vulkan backend (not yet integrated)
+- `ggml/src/ggml-opencl/` — OpenCL backend (self-contained, embedded kernels)
+- `ggml/src/ggml-vulkan/` — Vulkan backend (auto-detected when `glslc` available)
+- `ggml/src/ggml-webgpu/` — WebGPU backend (opt-in, requires Emscripten 4.0+)
 
 ## Platform / Backend Matrix
-| Platform | Backend | SConstruct branch |
-|----------|---------|-------------------|
-| macOS / iOS | Metal + Accelerate | `env["platform"] in ["macos", "ios"]` |
-| Linux / Windows | CLBlast + OpenCL | `else` branch (non-apple, non-web) |
-| Android | CLBlast + OpenCL | same `else` branch |
-| Web | CPU-only (WASM) | `env["platform"] == "web"` |
+| Platform | Backend | SConstruct branch | SCons flag |
+|----------|---------|-------------------|------------|
+| macOS / iOS | Metal + Accelerate | `env["platform"] in ["macos", "ios"]` | (always) |
+| Linux / Windows / Android | OpenCL (self-contained) | `else` branch | (always) |
+| Linux / Windows / Android | Vulkan (SPIR-V shaders) | `else` branch | auto-detected (default) |
+| Web | CPU-only (WASM) | `env["platform"] == "web"` | (default) |
+| Web | WebGPU (WGSL shaders) | `env["platform"] == "web"` | `webgpu=yes` |
 
 ## Coding Conventions
 - Follow godot-cpp naming: `snake_case` for methods, `PascalCase` for classes.
@@ -58,13 +59,16 @@ scons target=template_release arch=arm64 precision=single
 # macOS (universal)
 scons target=template_release arch=universal precision=single
 
-# Linux
+# Linux (OpenCL + Vulkan auto-detected)
 scons target=template_release arch=x86_64 precision=single
 
 # Windows (from MSVC shell)
 scons target=template_release arch=x86_64 precision=single
 
-# Web
+# Web (WebGPU — requires Emscripten 4.0+)
+scons target=template_release arch=wasm32 precision=single webgpu=yes
+
+# Web (CPU-only, default)
 scons target=template_release arch=wasm32 precision=single
 
 # Copy to sample project

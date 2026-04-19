@@ -4,6 +4,9 @@
 *.o.tmp
 *.dblite
 
+# Generated build files
+gen/
+
 .DS_Store
 .vscode
 

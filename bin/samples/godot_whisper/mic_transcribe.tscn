@@ -6,7 +6,7 @@
 [ext_resource type="Script" path="res://samples/godot_whisper/StartButton.gd" id="3_bbt5i"]
 [ext_resource type="Script" path="res://samples/godot_whisper/enable_mic.gd" id="5_4gpdh"]
 [ext_resource type="Script" path="res://addons/godot_whisper/capture_stream_to_text.gd" id="5_c8lup"]
-[ext_resource type="WhisperResource" path="res://addons/godot_whisper/models/gglm-tiny.en.bin" id="6_1ttbt"]
+[ext_resource type="WhisperResource" path="res://addons/godot_whisper/models/ggml-tiny.en.bin" id="6_1ttbt"]
 
 [sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_rhq81"]
 

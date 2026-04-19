@@ -7,11 +7,6 @@ concurrency:
   group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}
   cancel-in-progress: true
 
-env:
-  OpenCL_ROOT: "${{ github.workspace }}/OpenCL-SDK"
-  OpenCL_INCLUDE_DIR: "${{ github.workspace }}/OpenCL-SDK/build/install/include"
-  OpenCL_LIBRARY: "${{ github.workspace }}/OpenCL-SDK/install/lib/OpenCL.lib"
-
 jobs:
   build:
     strategy:
@@ -37,14 +32,13 @@ jobs:
         with:
           platform: ios
           arch: ${{ matrix.arch }}
-          godot-cpp-location: godot-cpp
           float-precision: ${{ matrix.precision }}
           build-target-type: template_release
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Godot_Whisper
+          name: Godot_Whisper-ios-${{ matrix.arch }}-${{ matrix.precision }}
           path: |
             ${{ github.workspace }}/bin/**/libgodot_whisper.ios.template_release${{ matrix.ios_precision_extension }}.arm64.framework/**
           if-no-files-found: error

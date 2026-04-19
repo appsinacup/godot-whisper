@@ -6,10 +6,6 @@
 	path = thirdparty/whisper.cpp
 	url = https://github.com/ggml-org/whisper.cpp.git
 	branch = v1.8.4
-[submodule "thirdparty/clblast"]
-	path = thirdparty/clblast
-	url = https://github.com/CNugteren/CLBlast.git
-	branch = master
 [submodule "thirdparty/opencl_headers"]
 	path = thirdparty/opencl_headers
 	url = https://github.com/KhronosGroup/OpenCL-Headers.git
