@@ -20,7 +20,10 @@ jobs:
       - name: Run clang-format
         shell: bash
         run: |
-          clang-format --style=file:.clang-format src/** --dry-run --Werror
+          files=$(git ls-files -- '*.h' '*.cpp' ':!thirdparty')
+          if [ ! -z "$files" ]; then
+            clang-format --Wno-error=unknown --dry-run --Werror $files
+          fi
 
   build:
     needs: [lint]
