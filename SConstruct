@@ -309,7 +309,7 @@ else:
 
     # Build ICD loader with isolated defines (PRIVATE to the loader, not ggml-opencl)
     icd_env = env.Clone()
-    icd_env.Append(CPPPATH=[icd_loader_dir, icd_gen_dir])
+    icd_env.Append(CPPPATH=[icd_loader_dir, icd_gen_dir, "thirdparty/opencl_icd_loader/include"])
     icd_env.Append(CPPDEFINES=[
         ("CL_TARGET_OPENCL_VERSION", 300),
         "CL_NO_NON_ICD_DISPATCH_EXTENSION_PROTOTYPES",
