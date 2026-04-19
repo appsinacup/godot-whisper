@@ -319,9 +319,11 @@ else:
     ])
     sources.extend([icd_env.SharedObject(s) for s in icd_sources])
 
-    # Platform link libraries needed by the ICD loader
+    # Platform link libraries needed by the ICD loader and ggml-cpu
     if env["platform"] == "windows":
-        env.Append(LIBS=["cfgmgr32", "runtimeobject"])
+        # cfgmgr32/runtimeobject: ICD loader vendor enumeration
+        # advapi32: ggml-cpu.cpp uses Windows Registry APIs for CPU feature detection
+        env.Append(LIBS=["cfgmgr32", "runtimeobject", "advapi32"])
     else:
         # dl for dlopen (loading vendor .so), pthread for thread safety
         env.Append(LIBS=["dl", "pthread"])
