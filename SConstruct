@@ -148,6 +148,24 @@ elif env["platform"] in ["linux", "windows"]:
 
 sources.extend(cpu_sources)
 
+# ── Patch upstream bugs in whisper.cpp submodule ──────────────────────────────
+# sgemm.cpp has a known fp16 NEON guard bug (FIXME in source) that breaks arm32.
+# It checks !defined(_MSC_VER) instead of __ARM_FEATURE_FP16_VECTOR_ARITHMETIC.
+# Patch at build time so CI works without a custom submodule fork.
+_sgemm_path = cpu_dir + "/llamafile/sgemm.cpp"
+with open(_sgemm_path, "r") as f:
+    _sgemm_txt = f.read()
+_sgemm_orig = '#if !defined(_MSC_VER)\n// FIXME: this should check for __ARM_FEATURE_FP16_VECTOR_ARITHMETIC'
+if _sgemm_orig in _sgemm_txt:
+    _sgemm_txt = _sgemm_txt.replace(
+        _sgemm_orig,
+        '#if defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) && !defined(_MSC_VER)')
+    _sgemm_txt = _sgemm_txt.replace(
+        '#endif // _MSC_VER\n#endif // __ARM_NEON',
+        '#endif // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC\n#endif // __ARM_NEON')
+    with open(_sgemm_path, "w") as f:
+        f.write(_sgemm_txt)
+
 # ── whisper.cpp library itself ────────────────────────────────────────────────
 sources.append(whisper_dir + "/src/whisper.cpp")
 
