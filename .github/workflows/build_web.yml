@@ -16,13 +16,13 @@ jobs:
           - precision: double
             arch: wasm32
             gpu: cpu
-          # WebGPU (requires emscripten 4.0+)
-          - precision: single
-            arch: wasm32
-            gpu: webgpu
-          - precision: double
-            arch: wasm32
-            gpu: webgpu
+          # WebGPU (requires emscripten 4.0+). Disabled until Godot supports emscripted 4.0+
+          #- precision: single
+          #  arch: wasm32
+          #  gpu: webgpu
+          #- precision: double
+          #  arch: wasm32
+          #  gpu: webgpu
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
