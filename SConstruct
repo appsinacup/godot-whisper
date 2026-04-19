@@ -58,6 +58,7 @@ env.Append(
         "CPU_CLIPS_NEGATIVE=0",
         "WHISPER_BUILD",
         "GGML_BUILD",
+        "GGML_USE_CPU",
         "_GNU_SOURCE",
         "WHISPER_SHARED",
         "GGML_SHARED",
@@ -123,13 +124,16 @@ cpu_sources = [
 
 # ── Architecture-specific CPU files ──────────────────────────────────────────
 if env["platform"] in ["macos", "ios"]:
-    # Apple universal: include both ARM and x86 — guarded by #if defined(...)
-    cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
-    cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
-    cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
-    cpu_sources.append(cpu_dir + "/arch/x86/quants.c")
-    cpu_sources.append(cpu_dir + "/arch/x86/repack.cpp")
-    cpu_sources.append(cpu_dir + "/arch/x86/cpu-feats.cpp")
+    # On macOS/iOS, select arch-specific files matching the target.
+    # For universal builds: arm/ only (x86 macOS is deprecated; scalar fallback still works).
+    if env["arch"] == "x86_64":
+        cpu_sources.append(cpu_dir + "/arch/x86/quants.c")
+        cpu_sources.append(cpu_dir + "/arch/x86/repack.cpp")
+        cpu_sources.append(cpu_dir + "/arch/x86/cpu-feats.cpp")
+    else:
+        cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
+        cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
+        cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
 elif env["platform"] == "android":
     if env["arch"] in ["arm64", "arm32"]:
         cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
