@@ -47,7 +47,7 @@
 | **iOS** | Metal + Accelerate | GPU-accelerated via Metal |
 | **Windows** | OpenCL + Vulkan | x86_32, x86_64, arm64. Vulkan auto-detected when `glslc` is available |
 | **Linux** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
-| **Android** | OpenCL | OpenCL for GPU acceleration |
+| **Android** | OpenCL | GPU via OpenCL (Vulkan not supported upstream by whisper.cpp) |
 | **Web** | WebGPU | `scons webgpu=yes` — requires Emscripten 4.0.10+ (Godot default is 3.1.62). CPU-only without it |
 
 ## Video Tutorial
