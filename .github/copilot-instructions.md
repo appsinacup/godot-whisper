@@ -33,7 +33,7 @@ The submodule has a new directory structure (changed from the old monolithic lay
 - `ggml/src/ggml-metal/` — Metal backend (multiple .cpp/.m files)
 - `ggml/src/ggml-opencl/` — OpenCL backend (self-contained, embedded kernels)
 - `ggml/src/ggml-vulkan/` — Vulkan backend (auto-detected when `glslc` available)
-- `ggml/src/ggml-webgpu/` — WebGPU backend (opt-in, requires Emscripten 4.0+)
+- `ggml/src/ggml-webgpu/` — WebGPU backend (opt-in, requires Emscripten 4.0.10+)
 
 ## Platform / Backend Matrix
 | Platform | Backend | SConstruct branch | SCons flag |
@@ -65,7 +65,7 @@ scons target=template_release arch=x86_64 precision=single
 # Windows (from MSVC shell)
 scons target=template_release arch=x86_64 precision=single
 
-# Web (WebGPU — requires Emscripten 4.0+)
+# Web (WebGPU — requires Emscripten 4.0.10+)
 scons target=template_release arch=wasm32 precision=single webgpu=yes
 
 # Web (CPU-only, default)

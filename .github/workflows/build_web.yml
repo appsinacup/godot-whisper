@@ -50,7 +50,7 @@ jobs:
           arch: ${{ matrix.arch }}
           float-precision: ${{ matrix.precision }}
           build-target-type: template_release
-          em_version: "4.0.8"
+          em_version: "4.0.10"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

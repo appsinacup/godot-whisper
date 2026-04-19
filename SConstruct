@@ -3,6 +3,8 @@ import os
 import sys
 
 env = SConscript("thirdparty/godot-cpp/SConstruct")
+# Clone the env so our modifications don't leak to godot-cpp's pending builds.
+env = env.Clone()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 whisper_dir = "thirdparty/whisper.cpp"
@@ -151,7 +153,7 @@ if env["platform"] in ["macos", "ios"]:
 
 elif env["platform"] == "web":
     # ── Web: WebGPU (opt-in) or CPU-only ─────────────────────────────────
-    # WebGPU requires emscripten 4.0+ with emdawnwebgpu port.
+    # WebGPU requires emscripten 4.0.10+ with emdawnwebgpu port.
     # Godot's default emscripten is 3.1.62, so WebGPU is opt-in.
     # Enable with: scons webgpu=yes (or env WEBGPU=yes)
     _use_webgpu = ARGUMENTS.get("webgpu", os.environ.get("WEBGPU", "no")) in ["yes", "true", "1"]
