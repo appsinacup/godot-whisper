@@ -105,7 +105,7 @@ Available for all model sizes (both multilingual and English-only). Pre-quantize
 Silero VAD is a neural network that detects speech segments and auto-strips silence during transcription, **preventing hallucinations** from silent audio.
 
 **Setup:**
-1. Download `silero-vad.bin` (~1.9 MB) from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp)
+1. Download `ggml-silero-v6.2.0.bin` (~1.9 MB) — available in the Godot editor model downloader or from [Hugging Face](https://huggingface.co/ggml-org/whisper-vad)
 2. Set `vad_model_path` on the `SpeechToText` node
 3. Set `enable_vad = true`
 

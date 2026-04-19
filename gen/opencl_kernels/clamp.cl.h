@@ -1,40 +1,40 @@
 R"(#pragma OPENCL EXTENSION cl_khr_fp16 : enable
 )"
-R"(
+		R"(
 )"
-R"(//------------------------------------------------------------------------------
+		R"(//------------------------------------------------------------------------------
 )"
-R"(// clamp
+		R"(// clamp
 )"
-R"(//------------------------------------------------------------------------------
+		R"(//------------------------------------------------------------------------------
 )"
-R"(kernel void kernel_clamp(
+		R"(kernel void kernel_clamp(
 )"
-R"(        global float * src0,
+		R"(        global float * src0,
 )"
-R"(        ulong offset0,
+		R"(        ulong offset0,
 )"
-R"(        global float * dst,
+		R"(        global float * dst,
 )"
-R"(        ulong offsetd,
+		R"(        ulong offsetd,
 )"
-R"(        float min,
+		R"(        float min,
 )"
-R"(        float max
+		R"(        float max
 )"
-R"() {
+		R"() {
 )"
-R"(    src0 = (global float*)((global char*)src0 + offset0);
+		R"(    src0 = (global float*)((global char*)src0 + offset0);
 )"
-R"(    dst = (global float*)((global char*)dst + offsetd);
+		R"(    dst = (global float*)((global char*)dst + offsetd);
 )"
-R"(
+		R"(
 )"
-R"(    dst[get_global_id(0)] = src0[get_global_id(0)] < min ?
+		R"(    dst[get_global_id(0)] = src0[get_global_id(0)] < min ?
 )"
-R"(        min :
+		R"(        min :
 )"
-R"(        (src0[get_global_id(0)] > max ? max : src0[get_global_id(0)]);
+		R"(        (src0[get_global_id(0)] > max ? max : src0[get_global_id(0)]);
 )"
-R"(}
+		R"(}
 )"

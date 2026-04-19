@@ -4,6 +4,9 @@ extends Node
 ## Option button for selecting the model
 @export var option_button: OptionButton
 
+## VAD model names that use a different Hugging Face repository
+const VAD_MODELS := ["silero-v6.2.0", "silero-v5.1.2"]
+
 
 ## Called when the HTTP request is completed.
 func _http_request_completed(
@@ -32,11 +35,12 @@ func _on_button_pressed() -> void:
 	var file_path: String = "res://addons/godot_whisper/models/ggml-" + model + ".bin"
 	http_request.request_completed.connect(self._http_request_completed.bind(file_path))
 	http_request.download_file = file_path
-	var url: String = (
-		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-"
-		+ model
-		+ ".bin?download=true"
-	)
+	var base_url: String
+	if model in VAD_MODELS:
+		base_url = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-"
+	else:
+		base_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-"
+	var url: String = base_url + model + ".bin?download=true"
 	print("Downloading " + model + " from " + url)
 	var error: int = http_request.request(url)
 	# Handle HTTP request error
