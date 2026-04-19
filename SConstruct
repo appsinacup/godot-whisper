@@ -124,13 +124,49 @@ cpu_sources = [
 
 # ── Architecture-specific CPU files ──────────────────────────────────────────
 if env["platform"] in ["macos", "ios"]:
-    # On macOS/iOS, select arch-specific files matching the target.
-    # For universal builds: arm/ only (x86 macOS is deprecated; scalar fallback still works).
-    if env["arch"] == "x86_64":
+    if env["arch"] == "universal":
+        # Universal builds use "-arch x86_64 -arch arm64" so every source is
+        # compiled for BOTH architectures.  Arch-specific files (e.g.
+        # arch/arm/quants.c) have per-function #ifdef __ARM_NEON guards with
+        # scalar #else fallbacks, so the x86_64 slice produces non-generic
+        # symbol names that collide with arch-fallback.h renames in the base
+        # quants.c / repack.cpp.  Fix: compile each arch dir with only its
+        # target -arch flag so the other slice is never emitted.
+        def _single_arch_env(base_env, keep_arch):
+            """Return a clone of base_env with only one -arch flag."""
+            e = base_env.Clone()
+            for key in ("CCFLAGS", "LINKFLAGS"):
+                old = list(e.get(key, []))
+                new = []
+                i = 0
+                while i < len(old):
+                    if str(old[i]) == "-arch" and i + 1 < len(old):
+                        if str(old[i + 1]) == keep_arch:
+                            new.extend(["-arch", keep_arch])
+                        i += 2
+                    else:
+                        new.append(old[i])
+                        i += 1
+                e[key] = new
+            return e
+
+        arm_env = _single_arch_env(env, "arm64")
+        x86_env = _single_arch_env(env, "x86_64")
+
+        cpu_sources.extend([
+            arm_env.SharedObject(cpu_dir + "/arch/arm/quants.c"),
+            arm_env.SharedObject(cpu_dir + "/arch/arm/repack.cpp"),
+            arm_env.SharedObject(cpu_dir + "/arch/arm/cpu-feats.cpp"),
+            x86_env.SharedObject(cpu_dir + "/arch/x86/quants.c"),
+            x86_env.SharedObject(cpu_dir + "/arch/x86/repack.cpp"),
+            x86_env.SharedObject(cpu_dir + "/arch/x86/cpu-feats.cpp"),
+        ])
+    elif env["arch"] == "x86_64":
         cpu_sources.append(cpu_dir + "/arch/x86/quants.c")
         cpu_sources.append(cpu_dir + "/arch/x86/repack.cpp")
         cpu_sources.append(cpu_dir + "/arch/x86/cpu-feats.cpp")
     else:
+        # arm64
         cpu_sources.append(cpu_dir + "/arch/arm/quants.c")
         cpu_sources.append(cpu_dir + "/arch/arm/repack.cpp")
         cpu_sources.append(cpu_dir + "/arch/arm/cpu-feats.cpp")
