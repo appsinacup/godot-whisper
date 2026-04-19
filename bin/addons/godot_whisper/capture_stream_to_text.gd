@@ -2,7 +2,7 @@
 class_name CaptureStreamToText
 extends SpeechToText
 
-signal transcribed_msg(is_partial: bool, new_text: String)
+signal transcribed_msg(is_complete: bool, new_text: String)
 
 ## Initial prompt for the transcription
 ## For Traditional Chinese "以下是普通話的句子。"
@@ -44,6 +44,9 @@ signal transcribed_msg(is_partial: bool, new_text: String)
 ## Character to consider when ending a sentence.
 @export var punctuation_characters := ".!?;。；？！"
 
+## Use Silero neural network VAD instead of energy-based VAD. Requires a Silero VAD model (.bin).
+@export var use_silero_vad := false
+
 var thread: Thread
 var _accumulated_frames: PackedVector2Array
 
@@ -62,6 +65,9 @@ func _ready() -> void:
 		thread.wait_to_finish()
 	thread = Thread.new()
 	_effect_capture.clear_buffer()
+	# Enable Silero VAD on the SpeechToText node if requested
+	if use_silero_vad:
+		enable_vad = true
 	thread.start(transcribe_thread)
 
 
@@ -77,7 +83,18 @@ func transcribe_thread() -> void:
 		if resampled.size() <= 0:
 			OS.delay_msec(transcribe_interval * 1000)
 			continue
-		var no_activity := voice_activity_detection(resampled)
+		var no_activity: bool
+		if use_silero_vad:
+			# Use Silero neural network VAD for more accurate speech detection
+			var segments := detect_speech_segments(resampled)
+			no_activity = segments.is_empty()
+		else:
+			no_activity = voice_activity_detection(resampled)
+		if no_activity:
+			var interval_sleep := transcribe_interval * 1000 - (Time.get_ticks_msec() - start_time)
+			if interval_sleep > 0:
+				OS.delay_msec(interval_sleep)
+			continue
 		var total_time: float = (
 			(resampled.size() as float) / SpeechToText.SPEECH_SETTING_SAMPLE_RATE
 		)
@@ -105,8 +122,6 @@ func transcribe_thread() -> void:
 		):
 			finish_sentence = false
 		var time_processing := Time.get_ticks_msec() - start_time
-		if no_activity:
-			continue
 		if finish_sentence:
 			_accumulated_frames = _accumulated_frames.slice(
 				_accumulated_frames.size() - (0.2 * mix_rate)
@@ -136,17 +151,16 @@ func _remove_special_characters(message: String) -> String:
 	for special_character in special_characters:
 		while message.find(special_character["start"]) != -1:
 			var begin_character := message.find(special_character["start"])
-			var end_character := message.find(special_character["end"])
+			var end_character := message.find(special_character["end"], begin_character + 1)
 			if end_character != -1:
 				message = message.substr(0, begin_character) + message.substr(end_character + 1)
+			else:
+				break
 
-	var hallucinatory_character := [". you."]
-	for special_character in hallucinatory_character:
-		while message.find(special_character) != -1:
-			var begin_character := message.find(special_character)
-			var end_character := begin_character + len(special_character)
-			message = message.substr(0, begin_character) + message.substr(end_character + 1)
-	return message
+	var hallucinatory_characters := [". you.", ". You."]
+	for hallucination in hallucinatory_characters:
+		message = message.replace(hallucination, "")
+	return message.strip_edges()
 
 
 ## Handle notifications

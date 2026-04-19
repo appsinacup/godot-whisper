@@ -1,7 +1,7 @@
 [configuration]
 
 entry_symbol = "godot_whisper_library_init"
-compatibility_minimum = 4.1
+compatibility_minimum = 4.2
 
 [libraries]
 
@@ -19,10 +19,14 @@ windows.debug.x86_32 = "bin/libgodot_whisper.windows.template_release.x86_32.dll
 windows.release.x86_32 = "bin/libgodot_whisper.windows.template_release.x86_32.dll"
 windows.debug.x86_64 = "bin/libgodot_whisper.windows.template_release.x86_64.dll"
 windows.release.x86_64 = "bin/libgodot_whisper.windows.template_release.x86_64.dll"
+windows.debug.arm64 = "bin/libgodot_whisper.windows.template_release.arm64.dll"
+windows.release.arm64 = "bin/libgodot_whisper.windows.template_release.arm64.dll"
 windows.debug.double.x86_32 = "bin/libgodot_whisper.windows.template_release.double.x86_32.dll"
 windows.release.double.x86_32 = "bin/libgodot_whisper.windows.template_release.double.x86_32.dll"
 windows.debug.double.x86_64 = "bin/libgodot_whisper.windows.template_release.double.x86_64.dll"
 windows.release.double.x86_64 = "bin/libgodot_whisper.windows.template_release.double.x86_64.dll"
+windows.debug.double.arm64 = "bin/libgodot_whisper.windows.template_release.double.arm64.dll"
+windows.release.double.arm64 = "bin/libgodot_whisper.windows.template_release.double.arm64.dll"
 
 linux.debug.x86_64 = "bin/libgodot_whisper.linux.template_release.x86_64.so"
 linux.release.x86_64 = "bin/libgodot_whisper.linux.template_release.x86_64.so"

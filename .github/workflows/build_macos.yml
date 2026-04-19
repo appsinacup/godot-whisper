@@ -40,7 +40,6 @@ jobs:
         with:
           platform: macos
           arch: ${{ matrix.arch }}
-          godot-cpp-location: godot-cpp
           float-precision: ${{ matrix.precision }}
           build-target-type: template_release
 
@@ -59,7 +58,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Godot_Whisper
+          name: Godot_Whisper-macos-${{ matrix.arch }}-${{ matrix.precision }}
           path: |
             ${{ github.workspace }}/bin/addons/godot_whisper/ggml-metal.metal
             ${{ github.workspace }}/bin/addons/godot_whisper/bin/ggml-metal.metal

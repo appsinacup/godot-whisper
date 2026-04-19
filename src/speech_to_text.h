@@ -13,7 +13,7 @@
 #include <godot_cpp/variant/callable.hpp>
 
 #include <libsamplerate/src/samplerate.h>
-#include <whisper.cpp/whisper.h>
+#include <whisper.cpp/include/whisper.h>
 #include <godot_cpp/classes/project_settings.hpp>
 
 #include <atomic>
@@ -134,13 +134,19 @@ private:
 	Ref<WhisperResource> model;
 	whisper_context *context_instance = nullptr;
 
+	// Silero VAD context (lazy-initialized)
+	whisper_vad_context *vad_context = nullptr;
+	String vad_model_path;
+	bool enable_vad = false;
+	bool flash_attn = true;
+
 	_FORCE_INLINE_ bool _is_use_gpu() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/use_gpu"); }
 	_FORCE_INLINE_ float _get_entropy_threshold() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/entropy_treshold"); }
 	_FORCE_INLINE_ float _get_freq_thold() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/freq_treshold"); }
 	_FORCE_INLINE_ float _get_vad_thold() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/vad_treshold"); }
 	_FORCE_INLINE_ int _get_max_tokens() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/max_tokens"); }
-	_FORCE_INLINE_ bool _get_speed_up() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/speed_up_2x"); }
 	void _load_model();
+	void _load_vad_model();
 	std::vector<float> _add_audio_buffer(PackedVector2Array buffer);
 	const char *_language_to_code(Language language);
 
@@ -159,12 +165,19 @@ public:
 		SPEECH_SETTING_SAMPLE_RATE = WHISPER_SAMPLE_RATE
 	};
 	bool voice_activity_detection(PackedFloat32Array buffer);
+	Array detect_speech_segments(PackedFloat32Array buffer);
 	PackedFloat32Array resample(PackedVector2Array buffer, SpeechToText::InterpolatorType interpolator_type);
 	Array transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx);
 	void set_language(int p_language);
 	int get_language();
 	void set_language_model(Ref<WhisperResource> p_model);
 	_FORCE_INLINE_ Ref<WhisperResource> get_language_model() { return model; }
+	void set_vad_model_path(String p_path);
+	String get_vad_model_path();
+	void set_enable_vad(bool p_enable);
+	bool get_enable_vad();
+	void set_flash_attn(bool p_enable);
+	bool get_flash_attn();
 	SpeechToText();
 	~SpeechToText();
 };

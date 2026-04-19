@@ -24,10 +24,10 @@ func _process(_delta: float) -> void:
 	update_text()
 
 
-## Handle the speech-to-text transcribed message
-func _on_speech_to_text_transcribed_msg(is_partial: bool, new_text: String) -> void:
-	# Handle partial and complete transcriptions
-	if is_partial:
+## Handle the speech-to-text transcribed message.
+## is_complete: true when the sentence is finalized, false when still in progress.
+func _on_speech_to_text_transcribed_msg(is_complete: bool, new_text: String) -> void:
+	if is_complete:
 		completed_text += new_text
 		partial_text = ""
 	else:

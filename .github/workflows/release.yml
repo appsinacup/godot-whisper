@@ -30,6 +30,7 @@ jobs:
         with:
           name: Godot Whisper
           files: Godot_Whisper.zip
+          tag_name: nightly
           generate_release_notes: true
           draft: true
           prerelease: true

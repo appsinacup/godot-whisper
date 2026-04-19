@@ -45,6 +45,8 @@ void whisper_callback(enum ggml_log_level level, const char *text, void *user_da
 		case GGML_LOG_LEVEL_DEBUG: {
 			UtilityFunctions::print(text);
 		} break;
+		default:
+			break;
 	}
 }
 
@@ -66,7 +68,6 @@ void initialize_whisper_module(ModuleInitializationLevel p_level) {
 	register_setting("audio/input/transcribe/max_tokens", 16, PROPERTY_HINT_NONE, {});
 	register_setting("audio/input/transcribe/vad_treshold", 2.0, PROPERTY_HINT_NONE, {});
 	register_setting("audio/input/transcribe/use_gpu", true, PROPERTY_HINT_NONE, {});
-	register_setting("audio/input/transcribe/speed_up_2x", false, PROPERTY_HINT_NONE, {});
 }
 
 void uninitialize_whisper_module(ModuleInitializationLevel p_level) {
