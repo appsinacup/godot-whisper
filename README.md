@@ -11,9 +11,11 @@
         <img src="https://img.shields.io/badge/WhisperCPP-v1.8.4-%23478cbf?logoColor=white" /></a>
     <a href="https://github.com/godotengine/godot-cpp" alt="Godot Version">
         <img src="https://img.shields.io/badge/Godot-v4.2-%23478cbf?logo=godot-engine&logoColor=white" /></a>
-    <a href="https://discord.gg/v649emcpAu">
         <img src="https://img.shields.io/discord/1138836561102897172?logo=discord"
             alt="Chat on Discord"></a>
+    <a href="https://whisper.appsinacup.com" alt="Docs">
+        Documentation</a>
+    <a href="https://discord.gg/v649emcpAu">
 </p>
 
 <p align="center">
