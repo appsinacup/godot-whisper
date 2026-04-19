@@ -335,15 +335,19 @@ else:
             _host_compile_cmd
         )
 
-        # On Windows, "./" prefix doesn't work in cmd.exe
-        _tool_prefix = "" if sys.platform == "win32" else "./"
+        # On Windows, CMD needs ".\gen\..." to run local executables.
+        # On Unix, "./" prefix is needed.  Use os.sep for the path separator.
+        if sys.platform == "win32":
+            _tool_cmd = vulkan_gen_tool_bin.replace("/", "\\\\")
+        else:
+            _tool_cmd = "./" + vulkan_gen_tool_bin
 
         # Generate header with extern declarations (no glslc needed, fast)
         vulkan_hdr = env.Command(
             vulkan_header_path,
             vulkan_tool,
-            "{pfx}{tool} --output-dir {spvdir} --target-hpp $TARGET".format(
-                pfx=_tool_prefix, tool=vulkan_gen_tool_bin, spvdir=vulkan_spv_dir)
+            "{tool} --output-dir {spvdir} --target-hpp $TARGET".format(
+                tool=_tool_cmd, spvdir=vulkan_spv_dir)
         )
 
         # Compile each .comp shader → .cpp with embedded SPIR-V
@@ -354,9 +358,9 @@ else:
             _shader_cmd = env.Command(
                 _cpp_out,
                 _comp_path,
-                "{pfx}{tool} --glslc {glslc} --source $SOURCE "
+                "{tool} --glslc {glslc} --source $SOURCE "
                 "--output-dir {spvdir} --target-hpp {hdr} --target-cpp $TARGET".format(
-                    pfx=_tool_prefix, tool=vulkan_gen_tool_bin, glslc=_glslc_path,
+                    tool=_tool_cmd, glslc=_glslc_path,
                     spvdir=vulkan_spv_dir, hdr=vulkan_header_path)
             )
             env.Depends(_shader_cmd, [vulkan_tool, vulkan_hdr])

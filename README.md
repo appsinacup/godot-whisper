@@ -48,7 +48,7 @@
 | **Windows** | OpenCL + Vulkan | x86_32, x86_64, arm64. Vulkan auto-detected when `glslc` is available |
 | **Linux** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
 | **Android** | OpenCL | GPU via OpenCL (Vulkan not supported upstream by whisper.cpp) |
-| **Web** | WebGPU | `scons webgpu=yes` — requires Emscripten 4.0.10+ (Godot default is 3.1.62). CPU-only without it |
+| **Web** | WebGPU | `scons webgpu=yes` — **experimental**, requires matching Emscripten/Dawn versions. CPU-only by default |
 
 ## Video Tutorial
 

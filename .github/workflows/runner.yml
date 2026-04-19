@@ -46,13 +46,14 @@ jobs:
           ]
         target-type: [template_release]
         float-precision: [single, double]
-        include:
-          - target: { platform: web, arch: wasm32, os: ubuntu-latest, gpu: webgpu }
-            target-type: template_release
-            float-precision: single
-          - target: { platform: web, arch: wasm32, os: ubuntu-latest, gpu: webgpu }
-            target-type: template_release
-            float-precision: double
+        # WebGPU builds disabled — emdawnwebgpu API doesn't match whisper.cpp's ggml-webgpu yet
+        # include:
+        #   - target: { platform: web, arch: wasm32, os: ubuntu-latest, gpu: webgpu }
+        #     target-type: template_release
+        #     float-precision: single
+        #   - target: { platform: web, arch: wasm32, os: ubuntu-latest, gpu: webgpu }
+        #     target-type: template_release
+        #     float-precision: double
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Checkout
