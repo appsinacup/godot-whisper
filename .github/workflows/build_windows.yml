@@ -10,17 +10,9 @@ jobs:
       matrix:
         include:
           - precision: single
-            arch: x86_32
-          - precision: single
-            arch: x86_64
-          - precision: single
-            arch: arm64
-          - precision: double
-            arch: x86_32
-          - precision: double
             arch: x86_64
           - precision: double
-            arch: arm64
+            arch: x86_64
     runs-on: windows-latest
     steps:
       - name: Checkout
