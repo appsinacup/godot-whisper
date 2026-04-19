@@ -150,8 +150,9 @@ sources.extend(cpu_sources)
 # ── whisper.cpp library itself ────────────────────────────────────────────────
 sources.append(whisper_dir + "/src/whisper.cpp")
 
-# ── Disable narrowing warning (Clang) ────────────────────────────────────────
-if env["platform"] in ["macos", "ios"]:
+# ── Disable narrowing warning (Clang) ─────────────────────────────────────────
+# whisper.cpp/ggml has narrowing conversions that break on 32-bit (size_t = u32)
+if not env.get("is_msvc", False):
     env.Append(CCFLAGS=["-Wno-c++11-narrowing"])
 
 # ── Platform-specific backends ────────────────────────────────────────────────
