@@ -3,6 +3,7 @@
 *.o
 *.o.tmp
 *.dblite
+*.pyc
 
 # Generated build files
 gen/
