@@ -325,8 +325,11 @@ else:
         # advapi32: ggml-cpu.cpp uses Windows Registry APIs for CPU feature detection
         env.Append(LIBS=["cfgmgr32", "runtimeobject", "advapi32"])
     else:
-        # dl for dlopen (loading vendor .so), pthread for thread safety
-        env.Append(LIBS=["dl", "pthread"])
+        # dl for dlopen (loading vendor .so)
+        env.Append(LIBS=["dl"])
+        # pthread for thread safety (Android Bionic has it built-in, no -lpthread needed)
+        if env["platform"] != "android":
+            env.Append(LIBS=["pthread"])
 
     # ggml-opencl backend (self-contained in v1.8.4)
     sources.append(opencl_dir + "/ggml-opencl.cpp")
