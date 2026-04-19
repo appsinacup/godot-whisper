@@ -6,6 +6,18 @@ env = SConscript("thirdparty/godot-cpp/SConstruct")
 # Clone the env so our modifications don't leak to godot-cpp's pending builds.
 env = env.Clone()
 
+# whisper.cpp/ggml uses try/catch (e.g. ggml-backend-reg.cpp), so re-enable
+# exceptions that godot-cpp 4.2+ disables by default.
+if env.get("is_msvc", False):
+    if ("_HAS_EXCEPTIONS", 0) in env.get("CPPDEFINES", []):
+        env["CPPDEFINES"].remove(("_HAS_EXCEPTIONS", 0))
+    env.Append(CXXFLAGS=["/EHsc"])
+else:
+    cxxflags = env.get("CXXFLAGS", [])
+    if "-fno-exceptions" in cxxflags:
+        cxxflags.remove("-fno-exceptions")
+    env.Append(CXXFLAGS=["-fexceptions"])
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 whisper_dir = "thirdparty/whisper.cpp"
 ggml_dir    = whisper_dir + "/ggml"
