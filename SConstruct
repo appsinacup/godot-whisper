@@ -95,6 +95,7 @@ ggml_core_sources = [
     ggml_src + "/ggml-alloc.c",
     ggml_src + "/ggml-backend.cpp",
     ggml_src + "/ggml-backend-reg.cpp",
+    ggml_src + "/ggml-backend-dl.cpp",
     ggml_src + "/ggml-opt.cpp",
     ggml_src + "/ggml-quants.c",
     ggml_src + "/ggml-threading.cpp",
