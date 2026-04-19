@@ -90,8 +90,6 @@ Go to a github release, copy paste the addons folder to the samples folder. Rest
 
 # How to build
 
-# How to build
-
 ## Requirements
 
 - Sconstruct(if you want to build locally)
