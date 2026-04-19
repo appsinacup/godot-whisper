@@ -62,40 +62,6 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - uses: actions/checkout@v4
-        if: ${{ matrix.target.platform == 'linux' || matrix.target.platform == 'windows' || matrix.target.platform == 'android' }}
-        with:
-          path: ${{ github.workspace }}/OpenCL-SDK
-          branch: v2023.12.14
-          repository: KhronosGroup/OpenCL-SDK
-          submodules: true
-          fetch-depth: 0
-
-      - name: Check OpenCL Cache
-        if: ${{ matrix.target.platform == 'linux' || matrix.target.platform == 'windows' || matrix.target.platform == 'android' }}
-        id: opencl_cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            OpenCL-SDK
-          key: __${{ runner.os }}_${{ matrix.target.platform }}_${{ matrix.target.arch }}-opencl-v2021.06.30__${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            __${{runner.os }}-opencl__
-
-      - name: Build OpenCL (Linux/Android)
-        if: ${{ matrix.target.platform == 'linux' || matrix.target.platform == 'android' }}
-        run: |
-          cmake -S OpenCL-SDK -B ${{ github.workspace }}/OpenCL-SDK/build -DOPENCL_SDK_BUILD_SAMPLES=OFF -DOPENCL_ICD_LOADER_BUILD=ON -DOPENCL_SDK_BUILD_OPENGL_SAMPLES=OFF -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_TEST_SAMPLES=OFF
-          cmake --build ${{ github.workspace }}/OpenCL-SDK/build --target install
-
-      - name: Build OpenCL (Windows)
-        if: ${{ matrix.target.platform == 'windows' }}
-        shell: pwsh
-        run: |
-          $openclArch = switch ("${{ matrix.target.arch }}") { "x86_64" { "x64" } "arm64" { "ARM64" } default { "Win32" } }
-          cmake -G "Visual Studio 17 2022" -S OpenCL-SDK -B ${{ github.workspace }}/OpenCL-SDK/build -DOPENCL_SDK_BUILD_SAMPLES=OFF -DOPENCL_ICD_LOADER_BUILD=ON -DOPENCL_SDK_BUILD_OPENGL_SAMPLES=OFF -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_TEST_SAMPLES=OFF -A $openclArch
-          cmake --build ${{ github.workspace }}/OpenCL-SDK/build --target install
-
       - name: Install Vulkan SDK (Linux)
         if: ${{ matrix.target.platform == 'linux' }}
         run: |
@@ -108,27 +74,6 @@ jobs:
         with:
           vulkan_version: 1.3.296.0
           install_runtime: false
-
-      - name: Find OpenCL library path (Windows)
-        if: ${{ matrix.target.platform == 'windows' }}
-        id: opencl_path
-        shell: pwsh
-        run: |
-          $openclArch = switch ("${{ matrix.target.arch }}") { "x86_64" { "x64" } "arm64" { "ARM64" } default { "Win32" } }
-          $openclLib = "${{ github.workspace }}/OpenCL-SDK/install/lib/$openclArch/OpenCL.lib"
-          if (-not (Test-Path $openclLib)) {
-            $openclLib = "${{ github.workspace }}/OpenCL-SDK/install/lib/OpenCL.lib"
-          }
-          if (Test-Path $openclLib) {
-            Write-Host "opencl_lib=$openclLib" >> $env:GITHUB_OUTPUT
-          } else {
-            $found = Get-ChildItem -Path "${{ github.workspace }}/OpenCL-SDK/install" -Recurse -Filter "OpenCL.lib" | Select-Object -First 1
-            if ($found) {
-              Write-Host "opencl_lib=$($found.FullName)" >> $env:GITHUB_OUTPUT
-            } else {
-              Write-Host "opencl_lib=" >> $env:GITHUB_OUTPUT
-            }
-          }
 
       - name: GDExtension Build (Linux)
         if: ${{ matrix.target.platform == 'linux' }}
@@ -153,9 +98,6 @@ jobs:
         uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
         env:
           VULKAN: "yes"
-          OpenCL_ROOT: ${{ github.workspace }}/OpenCL-SDK
-          OpenCL_INCLUDE_DIR: ${{ github.workspace }}/OpenCL-SDK/build/install/include
-          OpenCL_LIBRARY: ${{ steps.opencl_path.outputs.opencl_lib != '' && steps.opencl_path.outputs.opencl_lib || format('{0}/OpenCL-SDK/install/lib/OpenCL.lib', github.workspace) }}
         with:
           platform: ${{ matrix.target.platform }}
           arch: ${{ matrix.target.arch }}

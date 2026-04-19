@@ -250,23 +250,81 @@ else:
             "GGML_USE_OPENCL",
             "GGML_OPENCL_EMBED_KERNELS",
             "GGML_OPENCL_SOA_Q",
+            ("GGML_OPENCL_TARGET_VERSION", 300),
         ]
     )
 
-    # OpenCL ICD library
-    env.Append(LIBPATH=["OpenCL-SDK/install/lib"])
+    # ── OpenCL ICD Loader (statically linked from submodule) ─────────────
+    # Instead of depending on system libOpenCL.so.1 / OpenCL.dll, we build
+    # the Khronos ICD loader directly and link it into the shared library.
+    # At runtime the ICD loader discovers vendor drivers via:
+    #   Linux/Android: /etc/OpenCL/vendors/*.icd (or /system/vendor/...)
+    #   Windows:       Registry HKLM\...\Khronos\OpenCL\Vendors
+    icd_loader_dir = "thirdparty/opencl_icd_loader/loader"
+    icd_gen_dir = "gen/opencl_icd"
+    os.makedirs(icd_gen_dir, exist_ok=True)
 
-    opencl_include_dir = os.environ.get("OpenCL_INCLUDE_DIR")
-    if opencl_include_dir:
-        env.Append(CPPPATH=[opencl_include_dir])
+    # Generate icd_cmake_config.h (CMake normally does this via configure_file)
+    _icd_config_path = os.path.join(icd_gen_dir, "icd_cmake_config.h")
+    _icd_config_lines = []
+    # Linux glibc has secure_getenv when _GNU_SOURCE is defined (already set).
+    # Android Bionic added it in API 28+; skip to avoid issues on older NDKs.
+    if env["platform"] == "linux":
+        _icd_config_lines.append("#define HAVE_SECURE_GETENV")
+    _icd_config_content = "\n".join(_icd_config_lines) + "\n"
+    # Only rewrite if content changed to avoid unnecessary rebuilds
+    _existing = ""
+    if os.path.exists(_icd_config_path):
+        with open(_icd_config_path, "r") as f:
+            _existing = f.read()
+    if _existing != _icd_config_content:
+        with open(_icd_config_path, "w") as f:
+            f.write(_icd_config_content)
 
-    opencl_library = os.environ.get("OpenCL_LIBRARY")
-    if opencl_library:
-        env.Append(LIBS=[opencl_library])
-    elif env["platform"] == "windows":
-        env.Append(LIBS=[":OpenCL.dll"])
-    elif env["platform"] == "linux":
-        env.Append(LIBS=[":libOpenCL.so.1"])
+    # Common ICD loader sources
+    icd_sources = [
+        icd_loader_dir + "/icd.c",
+        icd_loader_dir + "/icd_dispatch.c",
+        icd_loader_dir + "/icd_dispatch_generated.c",
+        icd_loader_dir + "/icd_trace.c",
+    ]
+
+    # Platform-specific ICD loader sources
+    if env["platform"] == "windows":
+        icd_sources.extend([
+            icd_loader_dir + "/windows/icd_windows.c",
+            icd_loader_dir + "/windows/icd_windows_dxgk.c",
+            icd_loader_dir + "/windows/icd_windows_library.c",
+            icd_loader_dir + "/windows/icd_windows_envvars.c",
+            icd_loader_dir + "/windows/icd_windows_hkr.c",
+            icd_loader_dir + "/windows/icd_windows_apppackage.c",
+        ])
+    else:
+        # Linux and Android (both use the linux/ ICD platform code)
+        icd_sources.extend([
+            icd_loader_dir + "/linux/icd_linux.c",
+            icd_loader_dir + "/linux/icd_linux_library.c",
+            icd_loader_dir + "/linux/icd_linux_envvars.c",
+        ])
+
+    # Build ICD loader with isolated defines (PRIVATE to the loader, not ggml-opencl)
+    icd_env = env.Clone()
+    icd_env.Append(CPPPATH=[icd_loader_dir, icd_gen_dir])
+    icd_env.Append(CPPDEFINES=[
+        ("CL_TARGET_OPENCL_VERSION", 300),
+        "CL_NO_NON_ICD_DISPATCH_EXTENSION_PROTOTYPES",
+        ("OPENCL_ICD_LOADER_VERSION_MAJOR", 3),
+        ("OPENCL_ICD_LOADER_VERSION_MINOR", 0),
+        ("OPENCL_ICD_LOADER_VERSION_REV", 8),
+    ])
+    sources.extend([icd_env.SharedObject(s) for s in icd_sources])
+
+    # Platform link libraries needed by the ICD loader
+    if env["platform"] == "windows":
+        env.Append(LIBS=["cfgmgr32", "runtimeobject"])
+    else:
+        # dl for dlopen (loading vendor .so), pthread for thread safety
+        env.Append(LIBS=["dl", "pthread"])
 
     # ggml-opencl backend (self-contained in v1.8.4)
     sources.append(opencl_dir + "/ggml-opencl.cpp")
