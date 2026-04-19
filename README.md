@@ -24,9 +24,8 @@
 
 ## Features
 
-|||
-|-|-|
 |**Realtime audio transcription**| **Offline audio transcription**|
+|-|-|
 |**GPU acceleration**| **Flash Attention**|
 |**Voice Activity Detection (VAD)**| **Quantized models**|
 |**99 languages**| **Model downloader**|
