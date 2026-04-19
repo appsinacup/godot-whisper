@@ -28,10 +28,9 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Godot Whisper
+          name: Godot Whisper Nightly
           files: Godot_Whisper.zip
           tag_name: nightly
-          generate_release_notes: true
-          draft: true
-          prerelease: true
+          draft: false
+          prerelease: false
           fail_on_unmatched_files: true
