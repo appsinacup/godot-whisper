@@ -35,6 +35,7 @@ jobs:
             { platform: linux, arch: x86_64, os: ubuntu-24.04 },
             { platform: windows, arch: x86_64, os: windows-latest },
             { platform: windows, arch: x86_32, os: windows-latest },
+            { platform: windows, arch: arm64, os: windows-latest },
             { platform: macos, arch: universal, os: macos-latest },
             { platform: android, arch: arm64, os: ubuntu-24.04 },
             { platform: android, arch: arm32, os: ubuntu-24.04 },
@@ -90,12 +91,12 @@ jobs:
         if: ${{ matrix.target.platform == 'windows' }}
         shell: pwsh
         run: |
-          $openclArch = if ("${{ matrix.target.arch }}" -eq "x86_64") { "x64" } else { "Win32" }
+          $openclArch = switch ("${{ matrix.target.arch }}") { "x86_64" { "x64" } "arm64" { "ARM64" } default { "Win32" } }
           cmake -G "Visual Studio 17 2022" -S OpenCL-SDK -B ${{ github.workspace }}/OpenCL-SDK/build -DOPENCL_SDK_BUILD_SAMPLES=OFF -DOPENCL_ICD_LOADER_BUILD=ON -DOPENCL_SDK_BUILD_OPENGL_SAMPLES=OFF -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_TEST_SAMPLES=OFF -A $openclArch
           cmake --build ${{ github.workspace }}/OpenCL-SDK/build --target install
 
-      - name: Install Vulkan SDK (Linux/Android)
-        if: ${{ matrix.target.platform == 'linux' || matrix.target.platform == 'android' }}
+      - name: Install Vulkan SDK (Linux)
+        if: ${{ matrix.target.platform == 'linux' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y libvulkan-dev glslc
@@ -112,7 +113,7 @@ jobs:
         id: opencl_path
         shell: pwsh
         run: |
-          $openclArch = if ("${{ matrix.target.arch }}" -eq "x86_64") { "x64" } else { "Win32" }
+          $openclArch = switch ("${{ matrix.target.arch }}") { "x86_64" { "x64" } "arm64" { "ARM64" } default { "Win32" } }
           $openclLib = "${{ github.workspace }}/OpenCL-SDK/install/lib/$openclArch/OpenCL.lib"
           if (-not (Test-Path $openclLib)) {
             $openclLib = "${{ github.workspace }}/OpenCL-SDK/install/lib/OpenCL.lib"
@@ -128,11 +129,18 @@ jobs:
             }
           }
 
-      - name: GDExtension Build (Linux/Android)
-        if: ${{ matrix.target.platform == 'linux' || matrix.target.platform == 'android' }}
+      - name: GDExtension Build (Linux)
+        if: ${{ matrix.target.platform == 'linux' }}
         uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
-        env:
-          VULKAN: "yes"
+        with:
+          platform: ${{ matrix.target.platform }}
+          arch: ${{ matrix.target.arch }}
+          float-precision: ${{ matrix.float-precision }}
+          build-target-type: ${{ matrix.target-type }}
+
+      - name: GDExtension Build (Android)
+        if: ${{ matrix.target.platform == 'android' }}
+        uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
         with:
           platform: ${{ matrix.target.platform }}
           arch: ${{ matrix.target.arch }}

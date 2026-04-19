@@ -12,11 +12,32 @@ if env.get("is_msvc", False):
     if ("_HAS_EXCEPTIONS", 0) in env.get("CPPDEFINES", []):
         env["CPPDEFINES"].remove(("_HAS_EXCEPTIONS", 0))
     env.Append(CXXFLAGS=["/EHsc"])
+elif env["platform"] == "web":
+    # Emscripten: godot-cpp uses -sSUPPORT_LONGJMP='wasm' (Wasm-based SJLJ),
+    # which is incompatible with -fexceptions (Emscripten JS-based EH).
+    # Use -fwasm-exceptions (native Wasm EH) which IS compatible with Wasm SJLJ.
+    cxxflags = env.get("CXXFLAGS", [])
+    if "-fno-exceptions" in cxxflags:
+        cxxflags.remove("-fno-exceptions")
+    env.Append(CXXFLAGS=["-fwasm-exceptions"])
+    env.Append(LINKFLAGS=["-fwasm-exceptions"])
 else:
     cxxflags = env.get("CXXFLAGS", [])
     if "-fno-exceptions" in cxxflags:
         cxxflags.remove("-fno-exceptions")
     env.Append(CXXFLAGS=["-fexceptions"])
+
+# ggml-backend-reg.cpp uses std::filesystem which requires iOS 13.0+.
+# godot-cpp defaults to ios_min_version=12.0, so bump it.
+if env["platform"] == "ios":
+    ccflags = env.get("CCFLAGS", [])
+    for i, flag in enumerate(ccflags):
+        if isinstance(flag, str) and "-miphoneos-version-min=" in flag:
+            ccflags[i] = "-miphoneos-version-min=13.0"
+            break
+        if isinstance(flag, str) and "-mios-simulator-version-min=" in flag:
+            ccflags[i] = "-mios-simulator-version-min=13.0"
+            break
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 whisper_dir = "thirdparty/whisper.cpp"
@@ -194,17 +215,14 @@ elif env["platform"] == "web":
         env.Append(CPPDEFINES=["GGML_USE_WEBGPU"])
         env.Append(CPPPATH=[webgpu_dir, webgpu_gen_dir])
         # Emscripten flags for Dawn WebGPU port
-        env.Append(CCFLAGS=["--use-port=emdawnwebgpu", "-fexceptions"])
-        env.Append(LINKFLAGS=["--use-port=emdawnwebgpu", "-sASYNCIFY", "-fexceptions"])
+        # Use -fwasm-exceptions (not -fexceptions) for compatibility with godot-cpp's -sSUPPORT_LONGJMP='wasm'
+        env.Append(CCFLAGS=["--use-port=emdawnwebgpu"])
+        env.Append(LINKFLAGS=["--use-port=emdawnwebgpu", "-sASYNCIFY"])
         sources.append(webgpu_dir + "/ggml-webgpu.cpp")
     # else: CPU-only (no additional flags needed)
 
 else:
     # ── Linux / Windows / Android: OpenCL (self-contained, no CLBlast) ───────
-    if env["platform"] == "windows":
-        env.Append(CCFLAGS=["/EHsc"])
-    else:
-        env.Append(CCFLAGS=["-fexceptions"])
 
     # --- Embed OpenCL kernels at build time (avoids runtime .cl file loading) -
     import glob as _glob
@@ -253,28 +271,37 @@ else:
 
     # ── Vulkan (auto-enabled when glslc is available) ──────────────────────
     # Override with: scons vulkan=no (or env VULKAN=no) to disable
+    # Note: Android NDK doesn't include vulkan/vulkan.hpp (C++ wrapper), so
+    # Vulkan is skipped for Android; OpenCL is used instead.
     import shutil as _shutil
     vulkan_opt = ARGUMENTS.get("vulkan", os.environ.get("VULKAN", "auto"))
-    _glslc_path = None
 
-    _vulkan_sdk = os.environ.get("VULKAN_SDK", "")
-    if _vulkan_sdk:
-        _candidate = os.path.join(_vulkan_sdk, "bin", "glslc")
-        if sys.platform == "win32":
-            _candidate += ".exe"
-        if os.path.exists(_candidate):
-            _glslc_path = _candidate
-    if not _glslc_path:
-        _glslc_path = _shutil.which("glslc")
+    if env["platform"] == "android":
+        # Android NDK lacks vulkan.hpp C++ headers needed by ggml-vulkan.cpp
+        if vulkan_opt in ["yes", "true", "1"]:
+            print("WARNING: Vulkan not supported for Android (missing vulkan.hpp). Using OpenCL only.")
+        _use_vulkan = False
+    else:
+        _glslc_path = None
 
-    _use_vulkan = False
-    if vulkan_opt in ["yes", "true", "1"]:
-        _use_vulkan = True
+        _vulkan_sdk = os.environ.get("VULKAN_SDK", "")
+        if _vulkan_sdk:
+            _candidate = os.path.join(_vulkan_sdk, "bin", "glslc")
+            if sys.platform == "win32":
+                _candidate += ".exe"
+            if os.path.exists(_candidate):
+                _glslc_path = _candidate
         if not _glslc_path:
-            print("ERROR: vulkan=yes but glslc not found. Install Vulkan SDK.")
-            Exit(1)
-    elif vulkan_opt == "auto":
-        _use_vulkan = _glslc_path is not None
+            _glslc_path = _shutil.which("glslc")
+
+        _use_vulkan = False
+        if vulkan_opt in ["yes", "true", "1"]:
+            _use_vulkan = True
+            if not _glslc_path:
+                print("ERROR: vulkan=yes but glslc not found. Install Vulkan SDK.")
+                Exit(1)
+        elif vulkan_opt == "auto":
+            _use_vulkan = _glslc_path is not None
 
     if _use_vulkan:
         print("Vulkan backend enabled (glslc: {})".format(_glslc_path))

@@ -10,7 +10,7 @@
     <a href="https://github.com/ggml-org/whisper.cpp" alt="Whisper CPP">
         <img src="https://img.shields.io/badge/WhisperCPP-v1.8.4-%23478cbf?logoColor=white" /></a>
     <a href="https://github.com/godotengine/godot-cpp" alt="Godot Version">
-        <img src="https://img.shields.io/badge/Godot-v4.1-%23478cbf?logo=godot-engine&logoColor=white" /></a>
+        <img src="https://img.shields.io/badge/Godot-v4.2-%23478cbf?logo=godot-engine&logoColor=white" /></a>
     <a href="https://github.com/appsinacup/godot-whisper/graphs/contributors" alt="Contributors">
         <img src="https://img.shields.io/github/contributors/appsinacup/godot-whisper" /></a>
     <a href="https://github.com/appsinacup/godot-whisper/pulse" alt="Activity">
@@ -45,10 +45,10 @@
 |----------|-------------|-------|
 | **macOS** | Metal + Accelerate | GPU-accelerated via Metal |
 | **iOS** | Metal + Accelerate | GPU-accelerated via Metal |
-| **Windows** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
+| **Windows** | OpenCL + Vulkan | x86_32, x86_64, arm64. Vulkan auto-detected when `glslc` is available |
 | **Linux** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
-| **Android** | OpenCL + Vulkan | Vulkan auto-detected when `glslc` is available |
-| **Web** | WebGPU | `scons webgpu=yes` — requires Emscripten 4.0+ (Godot default is 3.1.62). CPU-only without it |
+| **Android** | OpenCL | OpenCL for GPU acceleration |
+| **Web** | WebGPU | `scons webgpu=yes` — requires Emscripten 4.0.10+ (Godot default is 3.1.62). CPU-only without it |
 
 ## Video Tutorial
 

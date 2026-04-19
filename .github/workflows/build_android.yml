@@ -57,15 +57,8 @@ jobs:
           cmake -S OpenCL-SDK -B ${{ github.workspace }}/OpenCL-SDK/build -DOPENCL_SDK_BUILD_SAMPLES=OFF -DOPENCL_ICD_LOADER_BUILD=ON -DOPENCL_SDK_BUILD_OPENGL_SAMPLES=OFF -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_TEST_SAMPLES=OFF
           cmake --build ${{ github.workspace }}/OpenCL-SDK/build --target install
 
-      - name: Install Vulkan SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libvulkan-dev glslc
-
       - name: 🔗 GDExtension Build
         uses: godotengine/godot-cpp-template/.github/actions/build@f9564a9c8115139b9624692d39e358291f6d76ce
-        env:
-          VULKAN: "yes"
         with:
           platform: android
           arch: ${{ matrix.arch }}

@@ -1,14 +1,14 @@
 # Copilot Instructions — Godot Whisper
 
 ## Project Overview
-Godot Whisper is a GDExtension plugin that integrates [whisper.cpp](https://github.com/ggml-org/whisper.cpp) into the Godot Engine for real-time and offline speech-to-text transcription. It targets Godot 4.1+ via godot-cpp.
+Godot Whisper is a GDExtension plugin that integrates [whisper.cpp](https://github.com/ggml-org/whisper.cpp) into the Godot Engine for real-time and offline speech-to-text transcription. It targets Godot 4.2+ via godot-cpp.
 
 ## Architecture
 - **Build system**: SCons (`SConstruct` at root). No CMake for the plugin itself.
 - **Language**: C++ (godot-cpp style). Source files live in `src/`.
 - **Third-party deps** are git submodules under `thirdparty/`:
   - `whisper.cpp` (v1.8.4, ggml-org/whisper.cpp) — the ML inference engine
-  - `godot-cpp` (branch 4.1) — Godot C++ bindings
+  - `godot-cpp` (branch 4.2) — Godot C++ bindings
   - `opencl_headers`, `opencl_icd_loader` — OpenCL support (headers & ICD loader)
   - `libsamplerate` (0.1.9) — audio resampling
 - After cloning, run `git submodule update --init --recursive`.
@@ -39,8 +39,8 @@ The submodule has a new directory structure (changed from the old monolithic lay
 | Platform | Backend | SConstruct branch | SCons flag |
 |----------|---------|-------------------|------------|
 | macOS / iOS | Metal + Accelerate | `env["platform"] in ["macos", "ios"]` | (always) |
-| Linux / Windows / Android | OpenCL (self-contained) | `else` branch | (always) |
-| Linux / Windows / Android | Vulkan (SPIR-V shaders) | `else` branch | auto-detected (default) |
+| Linux / Windows | OpenCL (self-contained) + Vulkan | `else` branch | Vulkan auto-detected (default) |
+| Android | OpenCL (self-contained) | `else` branch | Vulkan skipped (NDK lacks vulkan.hpp) |
 | Web | CPU-only (WASM) | `env["platform"] == "web"` | (default) |
 | Web | WebGPU (WGSL shaders) | `env["platform"] == "web"` | `webgpu=yes` |
 

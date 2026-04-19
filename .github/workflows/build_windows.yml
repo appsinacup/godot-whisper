@@ -20,12 +20,18 @@ jobs:
           - precision: single
             arch: x86_64
             opencl_arch: x64
+          - precision: single
+            arch: arm64
+            opencl_arch: ARM64
           - precision: double
             arch: x86_32
             opencl_arch: Win32
           - precision: double
             arch: x86_64
             opencl_arch: x64
+          - precision: double
+            arch: arm64
+            opencl_arch: ARM64
     runs-on: windows-latest
     steps:
       - name: Checkout
