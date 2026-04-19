@@ -323,7 +323,8 @@ else:
     if env["platform"] == "windows":
         # cfgmgr32/runtimeobject: ICD loader vendor enumeration
         # advapi32: ggml-cpu.cpp uses Windows Registry APIs for CPU feature detection
-        env.Append(LIBS=["cfgmgr32", "runtimeobject", "advapi32"])
+        # ole32: ICD loader HKR vendor enumeration (StringFromGUID2)
+        env.Append(LIBS=["cfgmgr32", "runtimeobject", "advapi32", "ole32"])
     else:
         # dl for dlopen (loading vendor .so)
         env.Append(LIBS=["dl"])
