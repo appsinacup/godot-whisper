@@ -44,10 +44,8 @@ jobs:
           path: |
             ${{ github.workspace }}/bin/**/*.dll
             ${{ github.workspace }}/bin/samples/**
-            ${{ github.workspace }}/bin/addons/godot_whisper/bin/ggml-metal.metal
             ${{ github.workspace }}/bin/addons/godot_whisper/audio_stream_to_text.gd
             ${{ github.workspace }}/bin/addons/godot_whisper/capture_stream_to_text.gd
-            ${{ github.workspace }}/bin/addons/godot_whisper/ggml-metal.metal
             ${{ github.workspace }}/bin/addons/godot_whisper/godot_whisper.gdextension
             ${{ github.workspace }}/bin/addons/godot_whisper/label_transcribe.gd
             ${{ github.workspace }}/bin/addons/godot_whisper/model_downloader.gd

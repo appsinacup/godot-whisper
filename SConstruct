@@ -226,13 +226,59 @@ if env["platform"] in ["macos", "ios"]:
     env.Append(
         CPPDEFINES=[
             "GGML_USE_METAL",
+            "GGML_METAL_EMBED_LIBRARY",
             "GGML_USE_ACCELERATE",
             "ACCELERATE_NEW_LAPACK",
             "ACCELERATE_LAPACK_ILP64",
-            "GGML_METAL_PATH_RESOURCES=..",
         ]
     )
     env.Append(CPPPATH=[metal_dir])
+
+    # ── Embed Metal shader library into the binary ────────────────────────────
+    # Replicates the CMake GGML_METAL_EMBED_LIBRARY logic:
+    #   1. Inline ggml-common.h and ggml-metal-impl.h into ggml-metal.metal
+    #   2. Create an assembly file that .incbin's the result
+    #   3. Compile & link the assembly so the shader source is available at runtime
+    _metal_gen_dir = "gen/metal"
+    os.makedirs(_metal_gen_dir, exist_ok=True)
+
+    _metal_source      = metal_dir + "/ggml-metal.metal"
+    _metal_impl_h      = metal_dir + "/ggml-metal-impl.h"
+    _ggml_common_h     = ggml_src + "/ggml-common.h"
+    _metal_embed_metal = os.path.abspath(os.path.join(_metal_gen_dir, "ggml-metal-embed.metal"))
+    _metal_embed_asm   = os.path.join(_metal_gen_dir, "ggml-metal-embed.s")
+
+    # Check if regeneration is needed
+    _metal_deps = [_metal_source, _metal_impl_h, _ggml_common_h]
+    _needs_metal_regen = (
+        not os.path.exists(_metal_embed_asm) or
+        any(os.path.getmtime(d) > os.path.getmtime(_metal_embed_asm) for d in _metal_deps)
+    )
+    if _needs_metal_regen:
+        # Read sources
+        with open(_metal_source, "r") as f:
+            _mtl = f.read()
+        with open(_ggml_common_h, "r") as f:
+            _common_h = f.read()
+        with open(_metal_impl_h, "r") as f:
+            _impl_h = f.read()
+
+        # Inline the includes (same substitutions as CMake sed commands)
+        _mtl = _mtl.replace("__embed_ggml-common.h__", _common_h)
+        _mtl = _mtl.replace('#include "ggml-metal-impl.h"', _impl_h)
+
+        with open(_metal_embed_metal, "w") as f:
+            f.write(_mtl)
+
+        # Generate assembly that embeds the processed .metal source
+        with open(_metal_embed_asm, "w") as f:
+            f.write('.section __DATA,__ggml_metallib\n')
+            f.write('.globl _ggml_metallib_start\n')
+            f.write('_ggml_metallib_start:\n')
+            f.write('.incbin "' + _metal_embed_metal + '"\n')
+            f.write('.globl _ggml_metallib_end\n')
+            f.write('_ggml_metallib_end:\n')
+
     # ggml-metal-device has both .cpp and .m — give the .m an explicit object name
     metal_sources = [
         metal_dir + "/ggml-metal.cpp",
@@ -241,6 +287,7 @@ if env["platform"] in ["macos", "ios"]:
         env.SharedObject(metal_dir + "/ggml-metal-device_m", metal_dir + "/ggml-metal-device.m"),
         metal_dir + "/ggml-metal-context.m",
         metal_dir + "/ggml-metal-ops.cpp",
+        _metal_embed_asm,
     ]
     sources.extend(metal_sources)
 

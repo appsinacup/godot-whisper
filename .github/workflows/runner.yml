@@ -164,8 +164,6 @@ jobs:
             ${{ github.workspace }}/bin/**/*.dll
             ${{ github.workspace }}/bin/**/*.wasm
             ${{ github.workspace }}/bin/**/*.framework/**
-            ${{ github.workspace }}/bin/addons/godot_whisper/ggml-metal.metal
-            ${{ github.workspace }}/bin/addons/godot_whisper/bin/ggml-metal.metal
             ${{ github.workspace }}/bin/addons/godot_whisper/audio_stream_to_text.gd
             ${{ github.workspace }}/bin/addons/godot_whisper/capture_stream_to_text.gd
             ${{ github.workspace }}/bin/addons/godot_whisper/godot_whisper.gdextension
