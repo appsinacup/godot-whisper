@@ -279,6 +279,17 @@ if env["platform"] in ["macos", "ios"]:
             f.write('.globl _ggml_metallib_end\n')
             f.write('_ggml_metallib_end:\n')
 
+    # Compile the metal embed assembly using the C compiler (clang) rather than
+    # the raw 'as' assembler.  'as' on macOS defaults to a macOS target and does
+    # not receive the iOS SDK / -target flags that clang carries, which causes
+    # the linker to reject the object when building for iOS:
+    #   "ld: building for 'iOS', but linking in object file built for 'macOS'"
+    _metal_embed_obj = env.Command(
+        "gen/metal/ggml-metal-embed.os",
+        _metal_embed_asm,
+        "$CC $CCFLAGS -c -o $TARGET $SOURCE",
+    )
+
     # ggml-metal-device has both .cpp and .m — give the .m an explicit object name
     metal_sources = [
         metal_dir + "/ggml-metal.cpp",
@@ -287,7 +298,7 @@ if env["platform"] in ["macos", "ios"]:
         env.SharedObject(metal_dir + "/ggml-metal-device_m", metal_dir + "/ggml-metal-device.m"),
         metal_dir + "/ggml-metal-context.m",
         metal_dir + "/ggml-metal-ops.cpp",
-        _metal_embed_asm,
+        _metal_embed_obj,
     ]
     sources.extend(metal_sources)
 
