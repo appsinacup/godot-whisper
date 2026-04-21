@@ -284,11 +284,14 @@ if env["platform"] in ["macos", "ios"]:
     # not receive the iOS SDK / -target flags that clang carries, which causes
     # the linker to reject the object when building for iOS:
     #   "ld: building for 'iOS', but linking in object file built for 'macOS'"
-    _metal_embed_obj = env.Command(
-        "gen/metal/ggml-metal-embed.os",
-        _metal_embed_asm,
-        "$CC $CCFLAGS -c -o $TARGET $SOURCE",
-    )
+    # We clone the env and set AS=CC so that SharedObject() invokes clang with
+    # all the CCFLAGS (including -isysroot, -arch, -miphoneos-version-min, …).
+    # We also add "-c" to ASFLAGS because clang (unlike bare 'as') needs it to
+    # compile without linking.
+    _asm_env = env.Clone()
+    _asm_env["AS"] = env["CC"]
+    _asm_env["ASFLAGS"] = list(env.get("CCFLAGS", [])) + ["-c"]
+    _metal_embed_obj = _asm_env.SharedObject("gen/metal/ggml-metal-embed", _metal_embed_asm)
 
     # ggml-metal-device has both .cpp and .m — give the .m an explicit object name
     metal_sources = [
