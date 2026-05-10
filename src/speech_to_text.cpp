@@ -14,6 +14,53 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+bool _is_valid_utf8(const char *p_text) {
+	if (!p_text) {
+		return false;
+	}
+	const unsigned char *bytes = reinterpret_cast<const unsigned char *>(p_text);
+	for (size_t i = 0; bytes[i] != '\0';) {
+		unsigned char c = bytes[i];
+		size_t len = 0;
+		if (c <= 0x7F) {
+			i++;
+			continue;
+		} else if ((c & 0xE0) == 0xC0) {
+			if (c < 0xC2) {
+				return false;
+			}
+			len = 2;
+		} else if ((c & 0xF0) == 0xE0) {
+			len = 3;
+		} else if ((c & 0xF8) == 0xF0) {
+			if (c > 0xF4) {
+				return false;
+			}
+			len = 4;
+		} else {
+			return false;
+		}
+		for (size_t j = 1; j < len; j++) {
+			if ((bytes[i + j] & 0xC0) != 0x80) {
+				return false;
+			}
+		}
+		i += len;
+	}
+	return true;
+}
+
+String _string_from_valid_utf8(const char *p_text) {
+	if (!_is_valid_utf8(p_text)) {
+		return String();
+	}
+	return String::utf8(p_text);
+}
+
+} // namespace
+
 uint32_t _resample_audio_buffer(
 		const float *p_src, const uint32_t p_src_frame_count,
 		const uint32_t p_src_samplerate, const uint32_t p_target_samplerate,
@@ -492,6 +539,7 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	whisper_params.single_segment = true;
 	whisper_params.max_tokens = _get_max_tokens();
 	whisper_params.entropy_thold = _get_entropy_threshold();
+	whisper_params.temperature_inc = 0.0f;
 	whisper_params.initial_prompt = initial_prompt_utf8.get_data();
 
 	// Enable Silero VAD to auto-strip silence (prevents hallucinations)
@@ -515,12 +563,12 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	for (int i = 0; i < n_segments; ++i) {
 		const int n_tokens = whisper_full_n_tokens(context_instance, i);
 		auto segment_text = whisper_full_get_segment_text(context_instance, i);
-		full_text += String::utf8(segment_text);
+		full_text += _string_from_valid_utf8(segment_text);
 		for (int j = 0; j < n_tokens; j++) {
 			auto token = whisper_full_get_token_data(context_instance, i, j);
 			auto text = whisper_full_get_token_text(context_instance, i, j);
 			Dictionary dict;
-			dict["text"] = String::utf8(text);
+			dict["text"] = _string_from_valid_utf8(text);
 			dict["id"] = token.id;
 			dict["p"] = token.p;
 			dict["plog"] = token.plog;

@@ -38,6 +38,9 @@ signal transcribed_msg(is_complete: bool, new_text: String)
 ## How many tokens it's allowed to hallucinate. Can provide useful info as it talks, but too much can provide useless text.
 @export var hallucinating_count := 1
 
+## Emit unfinished text while the current sentence is still growing.
+@export var emit_partial_results := true
+
 ## The record bus has to have an AudioEffectCapture at index specified by [member audio_effect_capture_index]
 @export var record_bus := "Record"
 
@@ -71,15 +74,16 @@ func _ready() -> void:
 		thread.wait_to_finish()
 	thread = Thread.new()
 	_effect_capture.clear_buffer()
-	# Enable Silero VAD on the SpeechToText node if requested
 	if use_silero_vad:
 		enable_vad = true
+		if vad_model_path.is_empty():
+			push_warning("use_silero_vad is enabled, but vad_model_path is empty.")
 	thread.start(transcribe_thread)
 
 
 ## Thread function to handle transcription
 func transcribe_thread() -> void:
-	var last_token_count := 0
+	var last_text := ""
 	while recording:
 		var start_time := Time.get_ticks_msec()
 		_accumulated_frames.append_array(
@@ -97,14 +101,13 @@ func transcribe_thread() -> void:
 			continue
 		var no_activity := false
 		if use_silero_vad:
-			# Use Silero neural network VAD for more accurate speech detection
 			var segments := detect_speech_segments(resampled)
 			no_activity = segments.is_empty()
 		else:
 			no_activity = voice_activity_detection(resampled)
-		if no_activity and (total_time < minimum_sentence_time or last_token_count == 0):
+		if no_activity and (total_time < minimum_sentence_time or last_text.is_empty()):
 			_accumulated_frames.clear()
-			last_token_count = 0
+			last_text = ""
 			_sleep_remaining(start_time)
 			continue
 		var audio_ctx: int = total_time * 1500 / 30 + 128
@@ -115,35 +118,34 @@ func transcribe_thread() -> void:
 			push_warning("No tokens generated")
 			if no_activity:
 				_accumulated_frames.clear()
-				last_token_count = 0
+				last_text = ""
 			_sleep_remaining(start_time)
 			continue
 		var full_text: String = tokens.pop_front()
-		var mix_rate: int = ProjectSettings.get_setting("audio/driver/mix_rate")
-		var finish_sentence := no_activity
+		var text := _remove_special_characters(full_text)
+		if text.is_empty() or _is_repetitive_hallucination(text):
+			if no_activity:
+				_accumulated_frames.clear()
+				last_text = ""
+			_sleep_remaining(start_time)
+			continue
+		var finish_sentence := false
+		if total_time >= minimum_sentence_time:
+			finish_sentence = no_activity or _has_terminating_characters(text, punctuation_characters)
 		if total_time > maximum_sentence_time:
 			finish_sentence = true
-		var text: String
-		for token in tokens:
-			text += token["text"]
-		text = _remove_special_characters(text)
-		if _has_terminating_characters(text, punctuation_characters) or no_activity:
-			finish_sentence = true
-		if (
-			total_time < minimum_sentence_time
-			or abs(tokens.size() - last_token_count) > hallucinating_count
-		):
-			finish_sentence = false
 		var time_processing := Time.get_ticks_msec() - start_time
 		if finish_sentence:
+			var mix_rate: int = ProjectSettings.get_setting("audio/driver/mix_rate")
 			var keep_frames := int(sentence_overlap_time * mix_rate)
 			_accumulated_frames = _accumulated_frames.slice(
 				max(_accumulated_frames.size() - keep_frames, 0)
 			)
-		call_deferred("emit_signal", "transcribed_msg", finish_sentence, full_text)
-		last_token_count = 0 if finish_sentence else tokens.size()
-		print(full_text)
-		print("Transcribe " + str(time_processing / 1000.0) + " s")
+		if finish_sentence or (emit_partial_results and text != last_text):
+			call_deferred("emit_signal", "transcribed_msg", finish_sentence, text)
+			print(text)
+			print("Transcribe " + str(time_processing / 1000.0) + " s")
+		last_text = "" if finish_sentence else text
 		_sleep_remaining(start_time)
 
 
@@ -179,6 +181,22 @@ func _remove_special_characters(message: String) -> String:
 	for hallucination in hallucinatory_characters:
 		message = message.replace(hallucination, "")
 	return message.strip_edges()
+
+
+func _is_repetitive_hallucination(message: String) -> bool:
+	var normalized := message.to_lower()
+	for character in ".!?,;:()[]{}\"'":
+		normalized = normalized.replace(character, " ")
+	var words := normalized.split(" ", false)
+	if words.size() < 6:
+		return false
+	var counts := {}
+	for word in words:
+		counts[word] = counts.get(word, 0) + 1
+	for count in counts.values():
+		if count >= words.size() * 0.7:
+			return true
+	return false
 
 
 ## Handle notifications
