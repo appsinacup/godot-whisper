@@ -39,7 +39,7 @@
 | **Windows** | OpenCL + Vulkan |
 | **Linux** | OpenCL + Vulkan |
 | **Android** | OpenCL |
-| **Web** | WebGPU |
+| **Web** | CPU (WebGPU disabled until Godot supports it) |
 
 ## Video Tutorial
 
