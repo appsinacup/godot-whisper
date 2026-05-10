@@ -1,7 +1,12 @@
 #include "speech_to_text.h"
 #include <libsamplerate/src/samplerate.h>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
+#include <cfloat>
+#include <cstdint>
+#include <utility>
 #include <godot_cpp/classes/audio_server.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
@@ -9,6 +14,7 @@
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <string>
@@ -16,47 +22,106 @@
 
 namespace {
 
-bool _is_valid_utf8(const char *p_text) {
-	if (!p_text) {
+struct GodotModelLoaderContext {
+	Ref<FileAccess> file;
+};
+
+bool _open_model_loader(const String &p_path, GodotModelLoaderContext &r_context, whisper_model_loader &r_loader) {
+	if (p_path.is_empty()) {
+		ERR_PRINT("Whisper model file path is empty.");
 		return false;
 	}
-	const unsigned char *bytes = reinterpret_cast<const unsigned char *>(p_text);
-	for (size_t i = 0; bytes[i] != '\0';) {
-		unsigned char c = bytes[i];
-		size_t len = 0;
-		if (c <= 0x7F) {
-			i++;
-			continue;
-		} else if ((c & 0xE0) == 0xC0) {
-			if (c < 0xC2) {
-				return false;
-			}
-			len = 2;
-		} else if ((c & 0xF0) == 0xE0) {
-			len = 3;
-		} else if ((c & 0xF8) == 0xF0) {
-			if (c > 0xF4) {
-				return false;
-			}
-			len = 4;
-		} else {
-			return false;
-		}
-		for (size_t j = 1; j < len; j++) {
-			if ((bytes[i + j] & 0xC0) != 0x80) {
-				return false;
-			}
-		}
-		i += len;
+	if (!FileAccess::file_exists(p_path)) {
+		ERR_PRINT("Whisper model file not found: " + p_path);
+		return false;
 	}
+	r_context.file = FileAccess::open(p_path, FileAccess::READ);
+	if (r_context.file.is_null() || !r_context.file->is_open()) {
+		ERR_PRINT("Whisper model file could not be opened: " + p_path);
+		return false;
+	}
+
+	r_loader.context = &r_context;
+	r_loader.read = [](void *ctx, void *output, size_t read_size) {
+		GodotModelLoaderContext *loader_context = reinterpret_cast<GodotModelLoaderContext *>(ctx);
+		return (size_t)loader_context->file->get_buffer(reinterpret_cast<uint8_t *>(output), read_size);
+	};
+	r_loader.eof = [](void *ctx) {
+		GodotModelLoaderContext *loader_context = reinterpret_cast<GodotModelLoaderContext *>(ctx);
+		return loader_context->file->eof_reached();
+	};
+	r_loader.close = [](void *ctx) {
+		GodotModelLoaderContext *loader_context = reinterpret_cast<GodotModelLoaderContext *>(ctx);
+		if (loader_context->file.is_valid()) {
+			loader_context->file->close();
+		}
+	};
 	return true;
 }
 
-String _string_from_valid_utf8(const char *p_text) {
-	if (!_is_valid_utf8(p_text)) {
-		return String();
+uint32_t _read_le_u32(const uint8_t *p_bytes) {
+	return (uint32_t)p_bytes[0] |
+			((uint32_t)p_bytes[1] << 8) |
+			((uint32_t)p_bytes[2] << 16) |
+			((uint32_t)p_bytes[3] << 24);
+}
+
+bool _read_exact(const Ref<FileAccess> &p_file, uint8_t *p_dst, uint64_t p_size) {
+	return p_file.is_valid() && p_file->get_buffer(p_dst, p_size) == p_size;
+}
+
+bool _is_valid_silero_vad_model_file(const String &p_path) {
+	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ);
+	if (file.is_null() || !file->is_open()) {
+		ERR_PRINT("VAD model file could not be opened: " + p_path);
+		return false;
 	}
-	return String::utf8(p_text);
+
+	uint8_t data[4];
+	if (!_read_exact(file, data, 4) || _read_le_u32(data) != 0x67676d6c) {
+		ERR_PRINT("VAD model has invalid ggml magic: " + p_path);
+		return false;
+	}
+
+	if (!_read_exact(file, data, 4)) {
+		ERR_PRINT("VAD model header is incomplete: " + p_path);
+		return false;
+	}
+	const uint32_t model_type_len = _read_le_u32(data);
+	if (model_type_len == 0 || model_type_len > 64) {
+		ERR_PRINT("VAD model is not a Silero VAD model: " + p_path);
+		return false;
+	}
+
+	PackedByteArray model_type;
+	model_type.resize(model_type_len);
+	if (!_read_exact(file, model_type.ptrw(), model_type_len)) {
+		ERR_PRINT("VAD model type header is incomplete: " + p_path);
+		return false;
+	}
+	if (model_type_len < 6 || std::memcmp(model_type.ptr(), "silero", 6) != 0) {
+		ERR_PRINT("VAD model is not a Silero VAD model: " + p_path);
+		return false;
+	}
+
+	return true;
+}
+
+int _centiseconds_to_samples(float p_centiseconds) {
+	return (int)((p_centiseconds / 100.0f) * WHISPER_SAMPLE_RATE + 0.5f);
+}
+
+PackedByteArray _bytes_from_c_string(const char *p_text) {
+	PackedByteArray bytes;
+	if (!p_text) {
+		return bytes;
+	}
+	const size_t len = strlen(p_text);
+	bytes.resize(len);
+	if (len > 0) {
+		std::memcpy(bytes.ptrw(), p_text, len);
+	}
+	return bytes;
 }
 
 } // namespace
@@ -392,16 +457,16 @@ void SpeechToText::_load_model() {
 		ERR_PRINT("Whisper model file not found: " + model_path);
 		return;
 	}
-	PackedByteArray data = model->get_content();
-	if (data.is_empty()) {
-		ERR_PRINT("Whisper model file has no readable data: " + model_path);
-		return;
-	}
 	whisper_context_params context_params = whisper_context_default_params();
 	context_params.use_gpu = _is_use_gpu();
 	context_params.flash_attn = flash_attn;
 	UtilityFunctions::print(whisper_print_system_info());
-	context_instance = whisper_init_from_buffer_with_params((void *)(data.ptr()), data.size(), context_params);
+	GodotModelLoaderContext loader_context;
+	whisper_model_loader loader = {};
+	if (!_open_model_loader(model_path, loader_context, loader)) {
+		return;
+	}
+	context_instance = whisper_init_with_params(&loader, context_params);
 	if (!context_instance) {
 		ERR_PRINT("Failed to initialize Whisper context from model: " + model_path);
 	}
@@ -410,32 +475,152 @@ void SpeechToText::_load_model() {
 void SpeechToText::_load_vad_model() {
 	whisper_vad_free(vad_context);
 	vad_context = nullptr;
-	if (vad_model_path.is_empty()) {
+	if (vad_model.is_null()) {
+		return;
+	}
+	const String model_path = vad_model->get_file();
+	if (model_path.is_empty()) {
+		return;
+	}
+	if (!_is_valid_silero_vad_model_file(model_path)) {
 		return;
 	}
 	whisper_vad_context_params vad_ctx_params = whisper_vad_default_context_params();
-	vad_ctx_params.use_gpu = _is_use_gpu();
-	vad_context = whisper_vad_init_from_file_with_params(vad_model_path.utf8().get_data(), vad_ctx_params);
+	// Silero VAD is small; current upstream VAD graph can abort on Metal during init.
+	vad_ctx_params.use_gpu = false;
+	GodotModelLoaderContext loader_context;
+	whisper_model_loader loader = {};
+	if (!_open_model_loader(model_path, loader_context, loader)) {
+		return;
+	}
+	vad_context = whisper_vad_init_with_params(&loader, vad_ctx_params);
 	if (!vad_context) {
-		ERR_PRINT("Failed to load VAD model from: " + vad_model_path);
+		ERR_PRINT("Failed to load VAD model from: " + model_path);
 	}
 }
 
-void SpeechToText::set_vad_model_path(String p_path) {
-	vad_model_path = p_path;
-	_load_vad_model();
+whisper_vad_params SpeechToText::_get_silero_vad_params() const {
+	whisper_vad_params vad_params = whisper_vad_default_params();
+	vad_params.threshold = vad_threshold;
+	vad_params.min_speech_duration_ms = vad_min_speech_duration_ms;
+	vad_params.min_silence_duration_ms = vad_min_silence_duration_ms;
+	vad_params.max_speech_duration_s = vad_max_speech_duration_s > 0.0f ? vad_max_speech_duration_s : FLT_MAX;
+	vad_params.speech_pad_ms = vad_speech_pad_ms;
+	vad_params.samples_overlap = vad_samples_overlap;
+	return vad_params;
 }
 
-String SpeechToText::get_vad_model_path() {
-	return vad_model_path;
+PackedFloat32Array SpeechToText::_filter_speech_samples(PackedFloat32Array buffer) {
+	PackedFloat32Array filtered;
+	last_speech_segments.clear();
+	if (!vad_context) {
+		_load_vad_model();
+		if (!vad_context) {
+			return filtered;
+		}
+	}
+
+	whisper_vad_params vad_params = _get_silero_vad_params();
+	whisper_vad_segments *segments = whisper_vad_segments_from_samples(
+			vad_context, vad_params, buffer.ptr(), buffer.size());
+	if (!segments) {
+		ERR_PRINT("Failed to detect speech segments.");
+		return filtered;
+	}
+
+	const int n_segments = whisper_vad_segments_n_segments(segments);
+	if (n_segments <= 0) {
+		whisper_vad_free_segments(segments);
+		return filtered;
+	}
+
+	const int n_samples = buffer.size();
+	const int overlap_samples = vad_params.samples_overlap * WHISPER_SAMPLE_RATE;
+	const int silence_samples = 0.1f * WHISPER_SAMPLE_RATE;
+	std::vector<std::pair<int, int>> ranges;
+	ranges.reserve(n_segments);
+
+	for (int i = 0; i < n_segments; i++) {
+		const float segment_start_cs = whisper_vad_segments_get_segment_t0(segments, i);
+		const float segment_end_cs = whisper_vad_segments_get_segment_t1(segments, i);
+		int segment_start = _centiseconds_to_samples(segment_start_cs);
+		int segment_end = _centiseconds_to_samples(segment_end_cs);
+		if (i < n_segments - 1) {
+			segment_end += overlap_samples;
+		}
+		segment_start = std::max(0, std::min(segment_start, n_samples));
+		segment_end = std::max(segment_start, std::min(segment_end, n_samples));
+		if (segment_end <= segment_start) {
+			continue;
+		}
+		Dictionary segment;
+		segment["start"] = segment_start_cs;
+		segment["end"] = segment_end_cs;
+		last_speech_segments.push_back(segment);
+		ranges.push_back({ segment_start, segment_end });
+	}
+
+	whisper_vad_free_segments(segments);
+	if (ranges.empty()) {
+		return filtered;
+	}
+
+	int total_samples = 0;
+	for (const std::pair<int, int> &range : ranges) {
+		total_samples += range.second - range.first;
+	}
+	total_samples += ((int)ranges.size() - 1) * silence_samples;
+	filtered.resize(total_samples);
+	float *dst = filtered.ptrw();
+	const float *src = buffer.ptr();
+	int offset = 0;
+	for (int i = 0; i < (int)ranges.size(); i++) {
+		const int segment_start = ranges[i].first;
+		const int segment_len = ranges[i].second - ranges[i].first;
+		std::memcpy(dst + offset, src + segment_start, segment_len * sizeof(float));
+		offset += segment_len;
+		if (i < (int)ranges.size() - 1) {
+			std::memset(dst + offset, 0, silence_samples * sizeof(float));
+			offset += silence_samples;
+		}
+	}
+
+	return filtered;
 }
 
-void SpeechToText::set_enable_vad(bool p_enable) {
-	enable_vad = p_enable;
+void SpeechToText::set_vad_model(Ref<WhisperResource> p_model) {
+	vad_model = p_model;
+	last_speech_segments.clear();
+	whisper_vad_free(vad_context);
+	vad_context = nullptr;
 }
 
-bool SpeechToText::get_enable_vad() {
-	return enable_vad;
+void SpeechToText::set_vad_threshold(float p_threshold) {
+	vad_threshold = std::max(0.0f, std::min(p_threshold, 1.0f));
+}
+
+void SpeechToText::set_vad_min_speech_duration_ms(int p_ms) {
+	vad_min_speech_duration_ms = std::max(p_ms, 0);
+}
+
+void SpeechToText::set_vad_min_silence_duration_ms(int p_ms) {
+	vad_min_silence_duration_ms = std::max(p_ms, 0);
+}
+
+void SpeechToText::set_vad_max_speech_duration_s(float p_seconds) {
+	vad_max_speech_duration_s = std::max(p_seconds, 0.0f);
+}
+
+void SpeechToText::set_vad_speech_pad_ms(int p_ms) {
+	vad_speech_pad_ms = std::max(p_ms, 0);
+}
+
+void SpeechToText::set_vad_samples_overlap(float p_seconds) {
+	vad_samples_overlap = std::max(p_seconds, 0.0f);
+}
+
+void SpeechToText::set_token_timestamps(bool p_enable) {
+	token_timestamps = p_enable;
 }
 
 void SpeechToText::set_flash_attn(bool p_enable) {
@@ -505,10 +690,13 @@ bool SpeechToText::voice_activity_detection(PackedFloat32Array buffer) {
 Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 	Array result;
 	if (!vad_context) {
-		ERR_PRINT("VAD model not loaded. Set vad_model_path first.");
-		return result;
+		_load_vad_model();
+		if (!vad_context) {
+			ERR_PRINT("VAD model not loaded. Set vad_model first.");
+			return result;
+		}
 	}
-	whisper_vad_params vad_params = whisper_vad_default_params();
+	whisper_vad_params vad_params = _get_silero_vad_params();
 	whisper_vad_segments *segments = whisper_vad_segments_from_samples(
 			vad_context, vad_params, buffer.ptr(), buffer.size());
 	if (!segments) {
@@ -528,32 +716,37 @@ Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 
 Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx) {
 	Array return_value;
+	last_speech_segments.clear();
 	CharString initial_prompt_utf8 = initial_prompt.utf8();
-	CharString vad_model_path_utf8;
 	whisper_full_params whisper_params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 	whisper_params.language = _language_to_code(language);
 	whisper_params.audio_ctx = audio_ctx;
 	whisper_params.split_on_word = true;
-	whisper_params.token_timestamps = true;
+	whisper_params.token_timestamps = token_timestamps;
 	whisper_params.suppress_nst = true;
-	whisper_params.single_segment = true;
+	whisper_params.single_segment = vad_model.is_null();
 	whisper_params.max_tokens = _get_max_tokens();
 	whisper_params.entropy_thold = _get_entropy_threshold();
 	whisper_params.temperature_inc = 0.0f;
 	whisper_params.initial_prompt = initial_prompt_utf8.get_data();
 
-	// Enable Silero VAD to auto-strip silence (prevents hallucinations)
-	if (enable_vad && !vad_model_path.is_empty()) {
-		vad_model_path_utf8 = vad_model_path.utf8();
-		whisper_params.vad = true;
-		whisper_params.vad_model_path = vad_model_path_utf8.get_data();
+	PackedFloat32Array filtered_buffer;
+	const float *samples = buffer.ptr();
+	int n_samples = buffer.size();
+	if (vad_model.is_valid()) {
+		filtered_buffer = _filter_speech_samples(buffer);
+		if (filtered_buffer.is_empty()) {
+			return Array();
+		}
+		samples = filtered_buffer.ptr();
+		n_samples = filtered_buffer.size();
 	}
 
 	if (!context_instance) {
 		ERR_PRINT("Whisper context is null. Set language_model to a valid WhisperResource (.bin) before transcribing.");
 		return Array();
 	}
-	int ret = whisper_full(context_instance, whisper_params, buffer.ptr(), buffer.size());
+	int ret = whisper_full(context_instance, whisper_params, samples, n_samples);
 	if (ret != 0) {
 		ERR_PRINT("Failed to process audio, returned " + rtos(ret));
 		return Array();
@@ -563,14 +756,15 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	for (int i = 0; i < n_segments; ++i) {
 		const int n_tokens = whisper_full_n_tokens(context_instance, i);
 		auto segment_text = whisper_full_get_segment_text(context_instance, i);
-		full_text += _string_from_valid_utf8(segment_text);
+		full_text += String::utf8(segment_text);
 		for (int j = 0; j < n_tokens; j++) {
 			auto token = whisper_full_get_token_data(context_instance, i, j);
 			auto text = whisper_full_get_token_text(context_instance, i, j);
 			Dictionary dict;
-			dict["text"] = _string_from_valid_utf8(text);
+			dict["text_bytes"] = _bytes_from_c_string(text);
 			dict["id"] = token.id;
 			dict["p"] = token.p;
+			dict["confidence"] = token.p;
 			dict["plog"] = token.plog;
 			dict["pt"] = token.pt;
 			dict["ptsum"] = token.ptsum;
@@ -591,15 +785,28 @@ void SpeechToText::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_language", "language"), &SpeechToText::set_language);
 	ClassDB::bind_method(D_METHOD("get_language_model"), &SpeechToText::get_language_model);
 	ClassDB::bind_method(D_METHOD("set_language_model", "model"), &SpeechToText::set_language_model);
-	ClassDB::bind_method(D_METHOD("get_vad_model_path"), &SpeechToText::get_vad_model_path);
-	ClassDB::bind_method(D_METHOD("set_vad_model_path", "path"), &SpeechToText::set_vad_model_path);
-	ClassDB::bind_method(D_METHOD("get_enable_vad"), &SpeechToText::get_enable_vad);
-	ClassDB::bind_method(D_METHOD("set_enable_vad", "enable"), &SpeechToText::set_enable_vad);
+	ClassDB::bind_method(D_METHOD("get_vad_model"), &SpeechToText::get_vad_model);
+	ClassDB::bind_method(D_METHOD("set_vad_model", "model"), &SpeechToText::set_vad_model);
+	ClassDB::bind_method(D_METHOD("get_vad_threshold"), &SpeechToText::get_vad_threshold);
+	ClassDB::bind_method(D_METHOD("set_vad_threshold", "threshold"), &SpeechToText::set_vad_threshold);
+	ClassDB::bind_method(D_METHOD("get_vad_min_speech_duration_ms"), &SpeechToText::get_vad_min_speech_duration_ms);
+	ClassDB::bind_method(D_METHOD("set_vad_min_speech_duration_ms", "milliseconds"), &SpeechToText::set_vad_min_speech_duration_ms);
+	ClassDB::bind_method(D_METHOD("get_vad_min_silence_duration_ms"), &SpeechToText::get_vad_min_silence_duration_ms);
+	ClassDB::bind_method(D_METHOD("set_vad_min_silence_duration_ms", "milliseconds"), &SpeechToText::set_vad_min_silence_duration_ms);
+	ClassDB::bind_method(D_METHOD("get_vad_max_speech_duration_s"), &SpeechToText::get_vad_max_speech_duration_s);
+	ClassDB::bind_method(D_METHOD("set_vad_max_speech_duration_s", "seconds"), &SpeechToText::set_vad_max_speech_duration_s);
+	ClassDB::bind_method(D_METHOD("get_vad_speech_pad_ms"), &SpeechToText::get_vad_speech_pad_ms);
+	ClassDB::bind_method(D_METHOD("set_vad_speech_pad_ms", "milliseconds"), &SpeechToText::set_vad_speech_pad_ms);
+	ClassDB::bind_method(D_METHOD("get_vad_samples_overlap"), &SpeechToText::get_vad_samples_overlap);
+	ClassDB::bind_method(D_METHOD("set_vad_samples_overlap", "seconds"), &SpeechToText::set_vad_samples_overlap);
+	ClassDB::bind_method(D_METHOD("get_token_timestamps"), &SpeechToText::get_token_timestamps);
+	ClassDB::bind_method(D_METHOD("set_token_timestamps", "enable"), &SpeechToText::set_token_timestamps);
 	ClassDB::bind_method(D_METHOD("get_flash_attn"), &SpeechToText::get_flash_attn);
 	ClassDB::bind_method(D_METHOD("set_flash_attn", "enable"), &SpeechToText::set_flash_attn);
 	ClassDB::bind_method(D_METHOD("transcribe", "buffer", "initial_prompt", "audio_ctx"), &SpeechToText::transcribe);
 	ClassDB::bind_method(D_METHOD("voice_activity_detection", "buffer"), &SpeechToText::voice_activity_detection);
 	ClassDB::bind_method(D_METHOD("detect_speech_segments", "buffer"), &SpeechToText::detect_speech_segments);
+	ClassDB::bind_method(D_METHOD("get_last_speech_segments"), &SpeechToText::get_last_speech_segments);
 	ClassDB::bind_method(D_METHOD("resample", "buffer"), &SpeechToText::resample);
 
 	BIND_ENUM_CONSTANT(SRC_SINC_BEST_QUALITY);
@@ -714,7 +921,14 @@ void SpeechToText::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "language", PROPERTY_HINT_ENUM, "Auto,English,Chinese,German,Spanish,Russian,Korean,French,Japanese,Portuguese,Turkish,Polish,Catalan,Dutch,Arabic,Swedish,Italian,Indonesian,Hindi,Finnish,Vietnamese,Hebrew,Ukrainian,Greek,Malay,Czech,Romanian,Danish,Hungarian,Tamil,Norwegian,Thai,Urdu,Croatian,Bulgarian,Lithuanian,Latin,Maori,Malayalam,Welsh,Slovak,Telugu,Persian,Latvian,Bengali,Serbian,Azerbaijani,Slovenian,Kannada,Estonian,Macedonian,Breton,Basque,Icelandic,Armenian,Nepali,Mongolian,Bosnian,Kazakh,Albanian,Swahili,Galician,Marathi,Punjabi,Sinhala,Khmer,Shona,Yoruba,Somali,Afrikaans,Occitan,Georgian,Belarusian,Tajik,Sindhi,Gujarati,Amharic,Yiddish,Lao,Uzbek,Faroese,Haitian_Creole,Pashto,Turkmen,Nynorsk,Maltese,Sanskrit,Luxembourgish,Myanmar,Tibetan,Tagalog,Malagasy,Assamese,Tatar,Hawaiian,Lingala,Hausa,Bashkir,Javanese,Sundanese,Cantonese"), "set_language", "get_language");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "language_model", PROPERTY_HINT_RESOURCE_TYPE, "WhisperResource"), "set_language_model", "get_language_model");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enable_vad"), "set_enable_vad", "get_enable_vad");
-	ADD_PROPERTY(PropertyInfo(Variant::STRING, "vad_model_path", PROPERTY_HINT_FILE, "*.bin"), "set_vad_model_path", "get_vad_model_path");
+	ADD_GROUP("Voice Activity Detection", "vad_");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "vad_model", PROPERTY_HINT_RESOURCE_TYPE, "WhisperResource"), "set_vad_model", "get_vad_model");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "vad_threshold", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_vad_threshold", "get_vad_threshold");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "vad_min_speech_duration_ms", PROPERTY_HINT_RANGE, "0,60000,1,or_greater"), "set_vad_min_speech_duration_ms", "get_vad_min_speech_duration_ms");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "vad_min_silence_duration_ms", PROPERTY_HINT_RANGE, "0,60000,1,or_greater"), "set_vad_min_silence_duration_ms", "get_vad_min_silence_duration_ms");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "vad_max_speech_duration_s", PROPERTY_HINT_RANGE, "0,3600,0.1,or_greater"), "set_vad_max_speech_duration_s", "get_vad_max_speech_duration_s");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "vad_speech_pad_ms", PROPERTY_HINT_RANGE, "0,5000,1,or_greater"), "set_vad_speech_pad_ms", "get_vad_speech_pad_ms");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "vad_samples_overlap", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater"), "set_vad_samples_overlap", "get_vad_samples_overlap");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "token_timestamps"), "set_token_timestamps", "get_token_timestamps");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "flash_attn"), "set_flash_attn", "get_flash_attn");
 }

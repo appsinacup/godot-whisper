@@ -136,8 +136,15 @@ private:
 
 	// Silero VAD context (lazy-initialized)
 	whisper_vad_context *vad_context = nullptr;
-	String vad_model_path;
-	bool enable_vad = false;
+	Ref<WhisperResource> vad_model;
+	Array last_speech_segments;
+	float vad_threshold = 0.5f;
+	int vad_min_speech_duration_ms = 250;
+	int vad_min_silence_duration_ms = 100;
+	float vad_max_speech_duration_s = 0.0f;
+	int vad_speech_pad_ms = 30;
+	float vad_samples_overlap = 0.1f;
+	bool token_timestamps = true;
 	bool flash_attn = true;
 
 	_FORCE_INLINE_ bool _is_use_gpu() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/use_gpu"); }
@@ -147,6 +154,8 @@ private:
 	_FORCE_INLINE_ int _get_max_tokens() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/max_tokens"); }
 	void _load_model();
 	void _load_vad_model();
+	whisper_vad_params _get_silero_vad_params() const;
+	PackedFloat32Array _filter_speech_samples(PackedFloat32Array buffer);
 	std::vector<float> _add_audio_buffer(PackedVector2Array buffer);
 	const char *_language_to_code(Language language);
 
@@ -166,16 +175,29 @@ public:
 	};
 	bool voice_activity_detection(PackedFloat32Array buffer);
 	Array detect_speech_segments(PackedFloat32Array buffer);
+	_FORCE_INLINE_ Array get_last_speech_segments() const { return last_speech_segments; }
 	PackedFloat32Array resample(PackedVector2Array buffer, SpeechToText::InterpolatorType interpolator_type);
 	Array transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx);
 	void set_language(int p_language);
 	int get_language();
 	void set_language_model(Ref<WhisperResource> p_model);
 	_FORCE_INLINE_ Ref<WhisperResource> get_language_model() { return model; }
-	void set_vad_model_path(String p_path);
-	String get_vad_model_path();
-	void set_enable_vad(bool p_enable);
-	bool get_enable_vad();
+	void set_vad_model(Ref<WhisperResource> p_model);
+	_FORCE_INLINE_ Ref<WhisperResource> get_vad_model() { return vad_model; }
+	void set_vad_threshold(float p_threshold);
+	_FORCE_INLINE_ float get_vad_threshold() const { return vad_threshold; }
+	void set_vad_min_speech_duration_ms(int p_ms);
+	_FORCE_INLINE_ int get_vad_min_speech_duration_ms() const { return vad_min_speech_duration_ms; }
+	void set_vad_min_silence_duration_ms(int p_ms);
+	_FORCE_INLINE_ int get_vad_min_silence_duration_ms() const { return vad_min_silence_duration_ms; }
+	void set_vad_max_speech_duration_s(float p_seconds);
+	_FORCE_INLINE_ float get_vad_max_speech_duration_s() const { return vad_max_speech_duration_s; }
+	void set_vad_speech_pad_ms(int p_ms);
+	_FORCE_INLINE_ int get_vad_speech_pad_ms() const { return vad_speech_pad_ms; }
+	void set_vad_samples_overlap(float p_seconds);
+	_FORCE_INLINE_ float get_vad_samples_overlap() const { return vad_samples_overlap; }
+	void set_token_timestamps(bool p_enable);
+	_FORCE_INLINE_ bool get_token_timestamps() const { return token_timestamps; }
 	void set_flash_attn(bool p_enable);
 	bool get_flash_attn();
 	SpeechToText();

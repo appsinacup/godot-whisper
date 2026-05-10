@@ -12,4 +12,4 @@ func _init():
 func _ready():
 	audio_player.bus = "Record"
 	mic_player.bus = "Record"
-	audio_to_text.transcribed_msg.connect(transcribe_label._on_capture_stream_to_text_transcribed_msg)
+	audio_to_text.transcribed_msg_tokens.connect(transcribe_label._on_capture_stream_to_text_transcribed_msg_tokens)
