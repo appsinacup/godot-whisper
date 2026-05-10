@@ -21,10 +21,13 @@ signal transcribed_msg(is_complete: bool, new_text: String)
 		return recording
 
 ## The interval at which transcribing is done. Use a value bigger than the time it takes to transcribe (eg. depends on model).
-@export var transcribe_interval := 0.3
+@export var transcribe_interval := 0.8
 
 ## Using dynamic audio context speeds up transcribing but may result in mistakes.
-@export var use_dynamic_audio_context := true
+@export var use_dynamic_audio_context := false
+
+## Minimum buffered audio before running Whisper. Short buffers hallucinate badly.
+@export var minimum_transcribe_time := 1.5
 
 ## How much time has to pass in seconds until we can consider a sentence.
 @export var minimum_sentence_time := 3
@@ -46,6 +49,9 @@ signal transcribed_msg(is_complete: bool, new_text: String)
 
 ## Use Silero neural network VAD instead of energy-based VAD. Requires a Silero VAD model (.bin).
 @export var use_silero_vad := false
+
+## Audio kept after a completed sentence, so next decode has slight context.
+@export var sentence_overlap_time := 0.2
 
 var thread: Thread
 var _accumulated_frames: PackedVector2Array
@@ -81,33 +87,40 @@ func transcribe_thread() -> void:
 		)
 		var resampled := resample(_accumulated_frames, SpeechToText.SRC_SINC_FASTEST)
 		if resampled.size() <= 0:
-			OS.delay_msec(transcribe_interval * 1000)
+			_sleep_remaining(start_time)
 			continue
-		var no_activity: bool
+		var total_time: float = (
+			(resampled.size() as float) / SpeechToText.SPEECH_SETTING_SAMPLE_RATE
+		)
+		if total_time < minimum_transcribe_time:
+			_sleep_remaining(start_time)
+			continue
+		var no_activity := false
 		if use_silero_vad:
 			# Use Silero neural network VAD for more accurate speech detection
 			var segments := detect_speech_segments(resampled)
 			no_activity = segments.is_empty()
 		else:
 			no_activity = voice_activity_detection(resampled)
-		if no_activity:
-			var interval_sleep := transcribe_interval * 1000 - (Time.get_ticks_msec() - start_time)
-			if interval_sleep > 0:
-				OS.delay_msec(interval_sleep)
+		if no_activity and (total_time < minimum_sentence_time or last_token_count == 0):
+			_accumulated_frames.clear()
+			last_token_count = 0
+			_sleep_remaining(start_time)
 			continue
-		var total_time: float = (
-			(resampled.size() as float) / SpeechToText.SPEECH_SETTING_SAMPLE_RATE
-		)
 		var audio_ctx: int = total_time * 1500 / 30 + 128
 		if not use_dynamic_audio_context:
 			audio_ctx = 0
 		var tokens := transcribe(resampled, initial_prompt, audio_ctx)
 		if tokens.is_empty():
 			push_warning("No tokens generated")
-			return
+			if no_activity:
+				_accumulated_frames.clear()
+				last_token_count = 0
+			_sleep_remaining(start_time)
+			continue
 		var full_text: String = tokens.pop_front()
 		var mix_rate: int = ProjectSettings.get_setting("audio/driver/mix_rate")
-		var finish_sentence := false
+		var finish_sentence := no_activity
 		if total_time > maximum_sentence_time:
 			finish_sentence = true
 		var text: String
@@ -123,16 +136,21 @@ func transcribe_thread() -> void:
 			finish_sentence = false
 		var time_processing := Time.get_ticks_msec() - start_time
 		if finish_sentence:
+			var keep_frames := int(sentence_overlap_time * mix_rate)
 			_accumulated_frames = _accumulated_frames.slice(
-				_accumulated_frames.size() - (0.2 * mix_rate)
+				max(_accumulated_frames.size() - keep_frames, 0)
 			)
 		call_deferred("emit_signal", "transcribed_msg", finish_sentence, full_text)
-		last_token_count = tokens.size()
+		last_token_count = 0 if finish_sentence else tokens.size()
 		print(full_text)
 		print("Transcribe " + str(time_processing / 1000.0) + " s")
-		var interval_sleep := transcribe_interval * 1000 - time_processing
-		if interval_sleep > 0:
-			OS.delay_msec(interval_sleep)
+		_sleep_remaining(start_time)
+
+
+func _sleep_remaining(start_time: int) -> void:
+	var interval_sleep := int(transcribe_interval * 1000) - (Time.get_ticks_msec() - start_time)
+	if interval_sleep > 0:
+		OS.delay_msec(interval_sleep)
 
 
 ## Check if the message contains terminating characters
