@@ -15,6 +15,43 @@ const VAD_MODELS := ["silero-v6.2.0", "silero-v5.1.2"]
 
 const MODEL_GUIDE_URL := "https://whisper.appsinacup.com/docs/documentation/models#multilingual-models"
 const DOWNLOADED_PREFIX := "* "
+const MODEL_DOWNLOAD_SIZE := {
+	"tiny.en": "74.1 MiB",
+	"tiny": "74.1 MiB",
+	"base.en": "141.1 MiB",
+	"base": "141.1 MiB",
+	"small.en": "465.0 MiB",
+	"small": "465.0 MiB",
+	"medium.en": "1.43 GiB",
+	"medium": "1.43 GiB",
+	"large-v1": "2.88 GiB",
+	"large-v2": "2.88 GiB",
+	"large-v3": "2.88 GiB",
+	"large-v3-turbo": "1.51 GiB",
+	"tiny.en-q5_1": "30.7 MiB",
+	"tiny-q5_1": "30.7 MiB",
+	"tiny.en-q8_0": "41.5 MiB",
+	"tiny-q8_0": "41.5 MiB",
+	"base.en-q5_1": "57.0 MiB",
+	"base-q5_1": "56.9 MiB",
+	"base.en-q8_0": "78.0 MiB",
+	"base-q8_0": "78.0 MiB",
+	"small.en-q5_1": "181.3 MiB",
+	"small-q5_1": "181.3 MiB",
+	"small.en-q8_0": "252.2 MiB",
+	"small-q8_0": "252.2 MiB",
+	"medium.en-q5_0": "514.2 MiB",
+	"medium-q5_0": "514.2 MiB",
+	"medium.en-q8_0": "785.2 MiB",
+	"medium-q8_0": "785.2 MiB",
+	"large-v2-q5_0": "1.01 GiB",
+	"large-v2-q8_0": "1.54 GiB",
+	"large-v3-q5_0": "1.01 GiB",
+	"large-v3-turbo-q5_0": "547.4 MiB",
+	"large-v3-turbo-q8_0": "833.7 MiB",
+	"silero-v6.2.0": "0.8 MiB",
+	"silero-v5.1.2": "0.8 MiB",
+}
 
 
 func _ready() -> void:
@@ -41,12 +78,18 @@ func _get_model_info(model: String) -> String:
 	var notes := PackedStringArray()
 	if _has_model(model):
 		notes.append("Already downloaded.")
+		notes.append("File: " + _model_file_path(model))
 
 	if model in VAD_MODELS:
 		notes.append("Silero VAD.")
+		notes.append("Download: " + _get_download_size(model))
+		notes.append("Approx runtime memory: " + _get_runtime_memory(model))
 		notes.append("Use as `vad_model`.")
 		notes.append("Realtime capture uses it to find speech/silence boundaries and skip silence.")
 		return "\n".join(notes)
+
+	notes.append("Download: " + _get_download_size(model))
+	notes.append("Approx runtime memory: " + _get_runtime_memory(model))
 
 	if model.contains("large-v3-turbo"):
 		notes.append("Recommended desktop default: near large-v3 quality with much better speed.")
@@ -72,6 +115,52 @@ func _get_model_info(model: String) -> String:
 		notes.append("Full precision. Higher memory/download size.")
 
 	return "\n".join(notes)
+
+
+func _get_download_size(model: String) -> String:
+	return MODEL_DOWNLOAD_SIZE.get(model, "unknown")
+
+
+func _get_runtime_memory(model: String) -> String:
+	if model in VAD_MODELS:
+		return "~3 MiB"
+	if model.contains("large-v3-turbo"):
+		if model.contains("-q5"):
+			return "~1.0 GiB"
+		if model.contains("-q8"):
+			return "~1.4 GiB"
+		return "~2.2 GiB"
+	if model.contains("large"):
+		if model.contains("-q5"):
+			return "~1.7 GiB"
+		if model.contains("-q8"):
+			return "~2.4 GiB"
+		return "~4.5 GiB"
+	if model.contains("medium"):
+		if model.contains("-q5"):
+			return "~900 MiB"
+		if model.contains("-q8"):
+			return "~1.3 GiB"
+		return "~2.2 GiB"
+	if model.contains("small"):
+		if model.contains("-q5"):
+			return "~450 MiB"
+		if model.contains("-q8"):
+			return "~550 MiB"
+		return "~800 MiB"
+	if model.contains("base"):
+		if model.contains("-q5"):
+			return "~250 MiB"
+		if model.contains("-q8"):
+			return "~300 MiB"
+		return "~350 MiB"
+	if model.contains("tiny"):
+		if model.contains("-q5"):
+			return "~180 MiB"
+		if model.contains("-q8"):
+			return "~220 MiB"
+		return "~250 MiB"
+	return "unknown"
 
 
 func _refresh_model_items() -> void:

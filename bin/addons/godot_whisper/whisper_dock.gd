@@ -24,7 +24,6 @@ func _create_models_window() -> void:
 	window.title = "Whisper Models"
 	window.ok_button_text = "Close"
 	window.min_size = WINDOW_SIZE
-	window.size = WINDOW_SIZE
 	window.exclusive = false
 	content = preload("res://addons/godot_whisper/whisper_dock.tscn").instantiate()
 	window.add_child(content)
