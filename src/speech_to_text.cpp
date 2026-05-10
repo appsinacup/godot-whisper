@@ -2,11 +2,10 @@
 #include <libsamplerate/src/samplerate.h>
 #include <algorithm>
 #include <atomic>
-#include <cmath>
-#include <cstring>
 #include <cfloat>
+#include <cmath>
 #include <cstdint>
-#include <utility>
+#include <cstring>
 #include <godot_cpp/classes/audio_server.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
@@ -18,6 +17,7 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
