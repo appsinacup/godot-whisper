@@ -1,21 +1,29 @@
-[gd_scene load_steps=2 format=3 uid="uid://djeg76elc7vsf"]
+[gd_scene format=3 uid="uid://djeg76elc7vsf"]
 
-[ext_resource type="Script" path="res://addons/godot_whisper/model_downloader.gd" id="1_elf5c"]
+[ext_resource type="Script" uid="uid://54bp2qfkbth0" path="res://addons/godot_whisper/model_downloader.gd" id="1_elf5c"]
 
-[node name="WhisperDock" type="VBoxContainer" node_paths=PackedStringArray("option_button")]
+[node name="WhisperDock" type="VBoxContainer" unique_id=1020396887 node_paths=PackedStringArray("option_button", "download_button", "model_info_label")]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+size_flags_vertical = 4
 script = ExtResource("1_elf5c")
 option_button = NodePath("OptionButton")
+download_button = NodePath("Button")
+model_info_label = NodePath("ModelInfo")
 
-[node name="OptionButton" type="OptionButton" parent="."]
+[node name="Guide" type="Label" parent="." unique_id=816222837]
 layout_mode = 2
-item_count = 35
+text = "Pick a Whisper language model, then download Silero VAD if you use realtime capture."
+autowrap_mode = 2
+
+[node name="OptionButton" type="OptionButton" parent="." unique_id=1913914595]
+layout_mode = 2
 selected = 0
-popup/item_0/text = "tiny.en"
+item_count = 35
+popup/item_0/text = "* tiny.en"
 popup/item_0/id = 0
 popup/item_1/text = "tiny"
 popup/item_1/id = 1
@@ -39,11 +47,11 @@ popup/item_10/text = "large-v3"
 popup/item_10/id = 10
 popup/item_11/text = "large-v3-turbo"
 popup/item_11/id = 11
-popup/item_12/text = "tiny.en-q5_1"
+popup/item_12/text = "* tiny.en-q5_1"
 popup/item_12/id = 12
 popup/item_13/text = "tiny-q5_1"
 popup/item_13/id = 13
-popup/item_14/text = "tiny.en-q8_0"
+popup/item_14/text = "* tiny.en-q8_0"
 popup/item_14/id = 14
 popup/item_15/text = "tiny-q8_0"
 popup/item_15/id = 15
@@ -55,9 +63,9 @@ popup/item_18/text = "base.en-q8_0"
 popup/item_18/id = 18
 popup/item_19/text = "base-q8_0"
 popup/item_19/id = 19
-popup/item_20/text = "small.en-q5_1"
+popup/item_20/text = "* small.en-q5_1"
 popup/item_20/id = 20
-popup/item_21/text = "small-q5_1"
+popup/item_21/text = "* small-q5_1"
 popup/item_21/id = 21
 popup/item_22/text = "small.en-q8_0"
 popup/item_22/id = 22
@@ -77,17 +85,30 @@ popup/item_29/text = "large-v2-q8_0"
 popup/item_29/id = 29
 popup/item_30/text = "large-v3-q5_0"
 popup/item_30/id = 30
-popup/item_31/text = "large-v3-turbo-q5_0"
+popup/item_31/text = "* large-v3-turbo-q5_0"
 popup/item_31/id = 31
-popup/item_32/text = "large-v3-turbo-q8_0"
+popup/item_32/text = "* large-v3-turbo-q8_0"
 popup/item_32/id = 32
-popup/item_33/text = "silero-v6.2.0"
+popup/item_33/text = "* silero-v6.2.0"
 popup/item_33/id = 33
 popup/item_34/text = "silero-v5.1.2"
 popup/item_34/id = 34
 
-[node name="Button" type="Button" parent="."]
+[node name="ModelInfo" type="Label" parent="." unique_id=1561751663]
 layout_mode = 2
-text = "Download"
+text = "Already downloaded.
+Fastest. Best for prototypes and low-end devices.
+English-only. Faster and usually more accurate for English.
+Full precision. Higher memory/download size."
+autowrap_mode = 2
+
+[node name="Button" type="Button" parent="." unique_id=1372913044]
+layout_mode = 2
+text = "Redownload"
+
+[node name="DocsButton" type="Button" parent="." unique_id=1057884143]
+layout_mode = 2
+text = "Open model guide"
 
 [connection signal="pressed" from="Button" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="DocsButton" to="." method="_on_docs_button_pressed"]
