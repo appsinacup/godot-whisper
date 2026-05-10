@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cmath>
 #include <godot_cpp/classes/audio_server.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/core/error_macros.hpp>
@@ -331,18 +332,32 @@ void SpeechToText::set_language_model(Ref<WhisperResource> p_model) {
 void SpeechToText::_load_model() {
 	whisper_free(context_instance);
 	context_instance = nullptr;
-	UtilityFunctions::print(whisper_print_system_info());
 	if (model.is_null()) {
+		ERR_PRINT("Whisper model resource is null. Set language_model before transcribing.");
+		return;
+	}
+	const String model_path = model->get_file();
+	if (model_path.is_empty()) {
+		ERR_PRINT("Whisper model file path is empty. Set language_model to a .bin file.");
+		return;
+	}
+	if (!FileAccess::file_exists(model_path)) {
+		ERR_PRINT("Whisper model file not found: " + model_path);
 		return;
 	}
 	PackedByteArray data = model->get_content();
 	if (data.is_empty()) {
+		ERR_PRINT("Whisper model file has no readable data: " + model_path);
 		return;
 	}
 	whisper_context_params context_params = whisper_context_default_params();
 	context_params.use_gpu = _is_use_gpu();
 	context_params.flash_attn = flash_attn;
+	UtilityFunctions::print(whisper_print_system_info());
 	context_instance = whisper_init_from_buffer_with_params((void *)(data.ptr()), data.size(), context_params);
+	if (!context_instance) {
+		ERR_PRINT("Failed to initialize Whisper context from model: " + model_path);
+	}
 }
 
 void SpeechToText::_load_vad_model() {
@@ -466,6 +481,8 @@ Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 
 Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx) {
 	Array return_value;
+	CharString initial_prompt_utf8 = initial_prompt.utf8();
+	CharString vad_model_path_utf8;
 	whisper_full_params whisper_params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 	whisper_params.language = _language_to_code(language);
 	whisper_params.audio_ctx = audio_ctx;
@@ -475,16 +492,17 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	whisper_params.single_segment = true;
 	whisper_params.max_tokens = _get_max_tokens();
 	whisper_params.entropy_thold = _get_entropy_threshold();
-	whisper_params.initial_prompt = initial_prompt.utf8().get_data();
+	whisper_params.initial_prompt = initial_prompt_utf8.get_data();
 
 	// Enable Silero VAD to auto-strip silence (prevents hallucinations)
 	if (enable_vad && !vad_model_path.is_empty()) {
+		vad_model_path_utf8 = vad_model_path.utf8();
 		whisper_params.vad = true;
-		whisper_params.vad_model_path = vad_model_path.utf8().get_data();
+		whisper_params.vad_model_path = vad_model_path_utf8.get_data();
 	}
 
 	if (!context_instance) {
-		ERR_PRINT("Context instance is null");
+		ERR_PRINT("Whisper context is null. Set language_model to a valid WhisperResource (.bin) before transcribing.");
 		return Array();
 	}
 	int ret = whisper_full(context_instance, whisper_params, buffer.ptr(), buffer.size());
