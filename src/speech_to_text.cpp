@@ -118,7 +118,7 @@ PackedByteArray _bytes_from_c_string(const char *p_text) {
 	}
 	const size_t len = strlen(p_text);
 	bytes.resize(len);
-	if (len > 0) {
+	if (len > 0 && (size_t)bytes.size() >= len) {
 		std::memcpy(bytes.ptrw(), p_text, len);
 	}
 	return bytes;
