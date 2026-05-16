@@ -81,3 +81,13 @@ Go to Project -> Project Settings -> General -> Audio -> Input (Check Advance Se
 You will see a bunch of settings there.
 
 Also, as doing microphone transcribing requires the data to be at a 16000 sampling rate, you can change the audio driver mix rate to 16000: `audio/driver/mix_rate`. This way the resampling won't need to do any work, winning you some valuable 50-100ms for larger audio, but at the price of audio quality.
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=appsinacup%2Fgodot-whisper&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=appsinacup/godot-whisper&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=appsinacup/godot-whisper&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=appsinacup/godot-whisper&type=date&legend=top-left" />
+ </picture>
+</a>
