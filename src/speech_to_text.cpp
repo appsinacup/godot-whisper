@@ -227,6 +227,11 @@ int SpeechToText::get_language() {
 	return language;
 }
 
+void SpeechToText::_set_error(const String &p_message) {
+	last_error = p_message;
+	ERR_PRINT(p_message);
+}
+
 const char *SpeechToText::_language_to_code(Language language) {
 	switch (language) {
 		case Auto:
@@ -444,17 +449,18 @@ void SpeechToText::set_language_model(Ref<WhisperResource> p_model) {
 void SpeechToText::_load_model() {
 	whisper_free(context_instance);
 	context_instance = nullptr;
+	clear_last_error();
 	if (model.is_null()) {
-		ERR_PRINT("Whisper model resource is null. Set language_model before transcribing.");
+		_set_error("Whisper model resource is null. Set language_model before transcribing.");
 		return;
 	}
 	const String model_path = model->get_file();
 	if (model_path.is_empty()) {
-		ERR_PRINT("Whisper model file path is empty. Set language_model to a .bin file.");
+		_set_error("Whisper model file path is empty. Set language_model to a .bin file.");
 		return;
 	}
 	if (!FileAccess::file_exists(model_path)) {
-		ERR_PRINT("Whisper model file not found: " + model_path);
+		_set_error("Whisper model file not found: " + model_path);
 		return;
 	}
 	whisper_context_params context_params = whisper_context_default_params();
@@ -464,11 +470,12 @@ void SpeechToText::_load_model() {
 	GodotModelLoaderContext loader_context;
 	whisper_model_loader loader = {};
 	if (!_open_model_loader(model_path, loader_context, loader)) {
+		_set_error("Failed to open Whisper model: " + model_path);
 		return;
 	}
 	context_instance = whisper_init_with_params(&loader, context_params);
 	if (!context_instance) {
-		ERR_PRINT("Failed to initialize Whisper context from model: " + model_path);
+		_set_error("Failed to initialize Whisper context from model: " + model_path);
 	}
 }
 
@@ -483,6 +490,7 @@ void SpeechToText::_load_vad_model() {
 		return;
 	}
 	if (!_is_valid_silero_vad_model_file(model_path)) {
+		_set_error("VAD model is invalid: " + model_path);
 		return;
 	}
 	whisper_vad_context_params vad_ctx_params = whisper_vad_default_context_params();
@@ -491,11 +499,12 @@ void SpeechToText::_load_vad_model() {
 	GodotModelLoaderContext loader_context;
 	whisper_model_loader loader = {};
 	if (!_open_model_loader(model_path, loader_context, loader)) {
+		_set_error("Failed to open VAD model: " + model_path);
 		return;
 	}
 	vad_context = whisper_vad_init_with_params(&loader, vad_ctx_params);
 	if (!vad_context) {
-		ERR_PRINT("Failed to load VAD model from: " + model_path);
+		_set_error("Failed to load VAD model from: " + model_path);
 	}
 }
 
@@ -524,7 +533,7 @@ PackedFloat32Array SpeechToText::_filter_speech_samples(PackedFloat32Array buffe
 	whisper_vad_segments *segments = whisper_vad_segments_from_samples(
 			vad_context, vad_params, buffer.ptr(), buffer.size());
 	if (!segments) {
-		ERR_PRINT("Failed to detect speech segments.");
+		_set_error("Failed to detect speech segments.");
 		return filtered;
 	}
 
@@ -654,7 +663,7 @@ PackedFloat32Array SpeechToText::resample(PackedVector2Array buffer, SpeechToTex
 			resampled_float,
 			interpolator_type);
 	if (result_size != expected_size) {
-		ERR_PRINT("size differ exp: " + rtos(expected_size) + " res: " + rtos(result_size));
+		_set_error("Audio resample size differs. Expected: " + rtos(expected_size) + " Result: " + rtos(result_size));
 	}
 	PackedFloat32Array array;
 	array.resize(result_size);
@@ -692,7 +701,7 @@ Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 	if (!vad_context) {
 		_load_vad_model();
 		if (!vad_context) {
-			ERR_PRINT("VAD model not loaded. Set vad_model first.");
+			_set_error("VAD model not loaded. Set vad_model first.");
 			return result;
 		}
 	}
@@ -700,7 +709,7 @@ Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 	whisper_vad_segments *segments = whisper_vad_segments_from_samples(
 			vad_context, vad_params, buffer.ptr(), buffer.size());
 	if (!segments) {
-		ERR_PRINT("Failed to detect speech segments.");
+		_set_error("Failed to detect speech segments.");
 		return result;
 	}
 	int n = whisper_vad_segments_n_segments(segments);
@@ -715,6 +724,7 @@ Array SpeechToText::detect_speech_segments(PackedFloat32Array buffer) {
 }
 
 Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt, int audio_ctx) {
+	clear_last_error();
 	Array return_value;
 	last_speech_segments.clear();
 	CharString initial_prompt_utf8 = initial_prompt.utf8();
@@ -743,12 +753,12 @@ Array SpeechToText::transcribe(PackedFloat32Array buffer, String initial_prompt,
 	}
 
 	if (!context_instance) {
-		ERR_PRINT("Whisper context is null. Set language_model to a valid WhisperResource (.bin) before transcribing.");
+		_set_error("Whisper context is null. Set language_model to a valid WhisperResource (.bin) before transcribing.");
 		return Array();
 	}
 	int ret = whisper_full(context_instance, whisper_params, samples, n_samples);
 	if (ret != 0) {
-		ERR_PRINT("Failed to process audio, returned " + rtos(ret));
+		_set_error("Failed to process audio, returned " + rtos(ret));
 		return Array();
 	}
 	const int n_segments = whisper_full_n_segments(context_instance);
@@ -803,6 +813,8 @@ void SpeechToText::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_token_timestamps", "enable"), &SpeechToText::set_token_timestamps);
 	ClassDB::bind_method(D_METHOD("get_flash_attn"), &SpeechToText::get_flash_attn);
 	ClassDB::bind_method(D_METHOD("set_flash_attn", "enable"), &SpeechToText::set_flash_attn);
+	ClassDB::bind_method(D_METHOD("get_last_error"), &SpeechToText::get_last_error);
+	ClassDB::bind_method(D_METHOD("clear_last_error"), &SpeechToText::clear_last_error);
 	ClassDB::bind_method(D_METHOD("transcribe", "buffer", "initial_prompt", "audio_ctx"), &SpeechToText::transcribe);
 	ClassDB::bind_method(D_METHOD("voice_activity_detection", "buffer"), &SpeechToText::voice_activity_detection);
 	ClassDB::bind_method(D_METHOD("detect_speech_segments", "buffer"), &SpeechToText::detect_speech_segments);

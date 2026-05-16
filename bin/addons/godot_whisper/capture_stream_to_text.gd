@@ -5,6 +5,8 @@ extends SpeechToText
 signal transcribed_msg(is_complete: bool, new_text: String)
 signal transcribed_msg_confidence(is_complete: bool, new_text: String, confidence: float)
 signal transcribed_msg_tokens(is_complete: bool, new_text: String, tokens: Array)
+signal status_changed(message: String, is_error: bool)
+signal input_level_changed(peak: float, rms: float)
 
 ## Initial prompt for the transcription
 ## For Traditional Chinese "以下是普通話的句子。"
@@ -12,15 +14,21 @@ signal transcribed_msg_tokens(is_complete: bool, new_text: String, tokens: Array
 @export var initial_prompt: String
 
 ## Flag to start/stop recording
+var _recording := true
+
 @export var recording := true:
 	set(value):
-		recording = value
-		if recording:
-			_ready()
+		if _recording == value:
+			return
+		_recording = value
+		if not is_inside_tree() or Engine.is_editor_hint():
+			return
+		if _recording:
+			_start_recording()
 		else:
-			thread.wait_to_finish()
+			_stop_recording()
 	get:
-		return recording
+		return _recording
 
 ## Audio step size in milliseconds. Lower values reduce latency at the cost of stability.
 @export var step_ms := 1000
@@ -73,40 +81,122 @@ var _audio_ms_since_commit := 0.0
 var _last_committed_text := ""
 var _stable_punctuation_text := ""
 var _stable_punctuation_count := 0
-
-@onready var _idx := AudioServer.get_bus_index(record_bus)
-@onready var _effect_capture := (
-	AudioServer.get_bus_effect(_idx, audio_effect_capture_index) as AudioEffectCapture
-)
+var _idx := -1
+var _effect_capture: AudioEffectCapture
+var _status_message := "Waiting for audio input."
+var _status_is_error := false
+var _last_input_frame_msec := 0
+var _last_level_emit_msec := 0
+var _last_no_audio_report_msec := 0
+var _last_non_silent_msec := 0
+var _last_silent_report_msec := 0
+var _received_audio_frames := 0
+var _input_device_name := ""
 
 
 ## Ready function to initialize the thread and clear buffer
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
+	if _recording:
+		_start_recording()
+	else:
+		_report_status("Recording stopped.", false)
+
+
+func _start_recording() -> void:
 	if thread and thread.is_alive():
-		recording = false
-		thread.wait_to_finish()
+		return
+	if not _prepare_capture_effect():
+		return
 	thread = Thread.new()
 	_configure_capture_buffer()
 	_effect_capture.clear_buffer()
 	_pending_frames.clear()
+	_last_input_frame_msec = Time.get_ticks_msec()
+	_last_non_silent_msec = _last_input_frame_msec
+	_last_no_audio_report_msec = 0
+	_last_silent_report_msec = 0
+	_received_audio_frames = 0
+	if not _status_is_error:
+		_report_status("Waiting for audio input.", false)
 	thread.start(transcribe_thread)
+
+
+func _stop_recording() -> void:
+	if thread and thread.is_alive():
+		thread.wait_to_finish()
+
+
+func emit_current_status() -> void:
+	call_deferred("emit_signal", "status_changed", _status_message, _status_is_error)
+
+
+func set_input_device_name(device_name: String) -> void:
+	_input_device_name = device_name
+
+
+func show_status(message: String, is_error: bool = false) -> void:
+	_report_status(message, is_error)
+
+
+func restart_recording() -> void:
+	if not _recording:
+		return
+	_recording = false
+	_stop_recording()
+	_recording = true
+	_start_recording()
+
+
+func _prepare_capture_effect() -> bool:
+	_idx = AudioServer.get_bus_index(record_bus)
+	if _idx < 0:
+		_report_status("Record bus '" + record_bus + "' was not found.", true)
+		return false
+	if audio_effect_capture_index < 0 or audio_effect_capture_index >= AudioServer.get_bus_effect_count(_idx):
+		_report_status("Record bus '" + record_bus + "' has no effect at index " + str(audio_effect_capture_index) + ".", true)
+		return false
+	_effect_capture = AudioServer.get_bus_effect(_idx, audio_effect_capture_index) as AudioEffectCapture
+	if _effect_capture == null:
+		_report_status("Record bus '" + record_bus + "' needs an AudioEffectCapture at index " + str(audio_effect_capture_index) + ".", true)
+		return false
+	if language_model == null:
+		_report_status("Language model missing. Set language_model before recording.", true)
+		return false
+	_input_device_name = AudioServer.get_input_device()
+	if not ProjectSettings.get_setting("audio/driver/enable_input", false):
+		_report_status("Microphone input disabled. Enable audio/driver/enable_input for live mic capture.", true)
+	return true
+
+
+func _report_status(message: String, is_error: bool) -> void:
+	if _status_message == message and _status_is_error == is_error:
+		return
+	_status_message = message
+	_status_is_error = is_error
+	call_deferred("emit_signal", "status_changed", message, is_error)
 
 
 ## Thread function to handle transcription
 func transcribe_thread() -> void:
 	var last_text := ""
-	while recording:
+	while _recording:
 		var start_time := Time.get_ticks_msec()
 		var new_frames := _collect_step_frames()
 		if new_frames.size() <= 0:
 			continue
 		var new_samples := resample(new_frames, SpeechToText.SRC_SINC_FASTEST)
+		if new_samples.is_empty():
+			_report_status(_last_error_or("Failed to resample audio input."), true)
+			continue
 		var window := _build_stream_window(new_samples)
 		_old_samples = window
 		var tokens := transcribe(window, initial_prompt, 0)
 		if tokens.is_empty():
+			var last_error := _last_error_or("")
+			if not last_error.is_empty():
+				_report_status(last_error, true)
 			continue
 		var speech_segments: Array = get_last_speech_segments()
 		var full_text: String = tokens.pop_front()
@@ -124,6 +214,8 @@ func transcribe_thread() -> void:
 			_last_committed_text = text
 			_reset_punctuation_stability()
 		if emit_partial_results and (text != last_text or commit_text):
+			if _status_is_error:
+				_report_status("Transcribing audio.", false)
 			call_deferred("emit_signal", "transcribed_msg", commit_text, text)
 			call_deferred("emit_signal", "transcribed_msg_confidence", commit_text, text, confidence)
 			call_deferred("emit_signal", "transcribed_msg_tokens", commit_text, text, display_tokens)
@@ -138,18 +230,68 @@ func _collect_step_frames() -> PackedVector2Array:
 	var step_frames := int(float(max(step_ms, 1)) * mix_rate / 1000.0)
 	var max_chunk_ms := max(step_ms, length_ms - keep_ms)
 	var max_chunk_frames := int(float(max(max_chunk_ms, 1)) * mix_rate / 1000.0)
-	while recording:
+	while _recording:
+		var now := Time.get_ticks_msec()
 		var available := _effect_capture.get_frames_available()
 		if available > 0:
-			_pending_frames.append_array(_effect_capture.get_buffer(available))
+			var frames := _effect_capture.get_buffer(available)
+			_pending_frames.append_array(frames)
+			_received_audio_frames += frames.size()
+			var peak := _emit_input_level(frames)
+			_last_input_frame_msec = now
+			if _status_message.begins_with("No audio frames"):
+				_report_status("Audio frames received from " + _input_device_status() + ". Waiting for voice.", false)
+			if peak > 0.0005:
+				_last_non_silent_msec = now
+				if _status_message.begins_with("Audio frames received, but signal is silent"):
+					_report_status("Audio signal received from " + _input_device_status() + ".", false)
+			elif _received_audio_frames > mix_rate / 2 and now - _last_non_silent_msec >= 1500 and now - _last_silent_report_msec >= 1500:
+				_last_silent_report_msec = now
+				_report_status("Audio frames received, but signal is silent from " + _input_device_status() + ". Check input device, OS mic permission, and mute/gain.", false)
 			_trim_pending_frames(mix_rate)
 		if _pending_frames.size() >= step_frames:
 			var chunk_frames := min(_pending_frames.size(), max_chunk_frames)
 			var result := _pending_frames.slice(0, chunk_frames)
 			_pending_frames = _pending_frames.slice(chunk_frames)
 			return result
+		if now - _last_input_frame_msec >= 1500 and now - _last_no_audio_report_msec >= 1500:
+			_last_no_audio_report_msec = now
+			call_deferred("emit_signal", "input_level_changed", 0.0, 0.0)
+			_report_status("No audio frames received from '" + record_bus + "' bus for " + _input_device_status() + ". Check mic permission, input device, and bus routing.", true)
 		OS.delay_msec(1)
 	return PackedVector2Array()
+
+
+func _emit_input_level(frames: PackedVector2Array) -> float:
+	var now := Time.get_ticks_msec()
+	var peak := 0.0
+	var sum_squares := 0.0
+	for frame in frames:
+		peak = max(peak, abs(frame.x))
+		peak = max(peak, abs(frame.y))
+		sum_squares += (frame.x * frame.x + frame.y * frame.y) * 0.5
+	var rms := 0.0
+	if frames.size() > 0:
+		rms = sqrt(sum_squares / float(frames.size()))
+	if now - _last_level_emit_msec >= 50:
+		_last_level_emit_msec = now
+		call_deferred("emit_signal", "input_level_changed", clamp(peak, 0.0, 1.0), clamp(rms, 0.0, 1.0))
+	return peak
+
+
+func _input_device_status() -> String:
+	if _input_device_name.is_empty():
+		return "selected input"
+	return "'" + _input_device_name + "'"
+
+
+func _last_error_or(fallback: String) -> String:
+	if not has_method("get_last_error"):
+		return fallback
+	var last_error := str(call("get_last_error"))
+	if last_error.is_empty():
+		return fallback
+	return last_error
 
 
 func _configure_capture_buffer() -> void:
@@ -316,8 +458,13 @@ func _is_repetitive_hallucination(message: String) -> bool:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		recording = false
-		if thread.is_alive():
+		if thread and thread.is_alive():
 			thread.wait_to_finish()
+
+
+func _exit_tree() -> void:
+	recording = false
+	_stop_recording()
 
 
 ## Get configuration warnings for the node

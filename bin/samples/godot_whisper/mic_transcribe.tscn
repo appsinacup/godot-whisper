@@ -18,19 +18,20 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -200.0
-offset_top = -219.5
+offset_top = -260.0
 offset_right = 200.0
-offset_bottom = 219.5
+offset_bottom = 260.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_d8spe")
 
 [node name="MicPlayer" type="AudioStreamPlayer" parent="." unique_id=1605972973]
 stream = SubResource("AudioStreamMicrophone_rhq81")
-autoplay = true
+bus = &"Record"
 
 [node name="AudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1833667918]
 stream = ExtResource("1_qetor")
+bus = &"Record"
 
 [node name="Panel" type="Panel" parent="." unique_id=1668157369]
 custom_minimum_size = Vector2(400, 400)
@@ -67,12 +68,40 @@ script = ExtResource("3_bbt5i")
 
 [node name="MicToggle" type="CheckBox" parent="HBoxContainer" unique_id=1053871025]
 layout_mode = 2
+button_pressed = true
 text = "Mic"
 script = ExtResource("5_4gpdh")
+
+[node name="InputDeviceLabel" type="Label" parent="HBoxContainer" unique_id=89086708]
+layout_mode = 2
+text = "Mic"
+
+[node name="InputDevice" type="OptionButton" parent="HBoxContainer" unique_id=1999476892]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
 
 [node name="Label" type="Label" parent="HBoxContainer" unique_id=1399056992]
 layout_mode = 2
 text = "Enable Microphone in Project Settings -> audio/driver/enable_input"
+
+[node name="InputLevel" type="HBoxContainer" parent="." unique_id=616878925]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="InputLevel" unique_id=1466915117]
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+text = "Input"
+
+[node name="LevelBar" type="ProgressBar" parent="InputLevel" unique_id=260963946]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+show_percentage = false
+
+[node name="LevelLabel" type="Label" parent="InputLevel" unique_id=2091365123]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "0%"
 
 [node name="CaptureStreamToText" type="SpeechToText" parent="." unique_id=598525342]
 language = 4

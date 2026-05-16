@@ -2,13 +2,14 @@ extends RichTextLabel
 
 
 func update_text() -> void:
-	text = completed_text + partial_text
+	text = status_text + completed_text + partial_text
 
 func _process(_delta: float) -> void:
 	update_text()
 
 var completed_text := ""
 var partial_text := ""
+var status_text := "[color=#8a8f98]Status: Waiting for audio input.[/color]\n\n"
 
 ## is_complete: true when a sentence/window boundary is committed, false when still in progress.
 func _on_capture_stream_to_text_transcribed_msg(is_complete: bool, new_text: String) -> void:
@@ -33,6 +34,12 @@ func _on_capture_stream_to_text_transcribed_msg_tokens(is_complete: bool, new_te
 	else:
 		if new_text != "":
 			partial_text = colored_text
+
+
+func _on_capture_stream_to_text_status_changed(message: String, is_error: bool) -> void:
+	var prefix := "Error: " if is_error else "Status: "
+	var color := "#ff5c5c" if is_error else "#8a8f98"
+	status_text = "[color=" + color + "]" + (prefix + message).xml_escape() + "[/color]\n\n"
 
 
 func _tokens_color(message: String, tokens: Array) -> String:

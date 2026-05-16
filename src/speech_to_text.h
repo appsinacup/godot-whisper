@@ -146,6 +146,7 @@ private:
 	float vad_samples_overlap = 0.1f;
 	bool token_timestamps = true;
 	bool flash_attn = true;
+	String last_error;
 
 	_FORCE_INLINE_ bool _is_use_gpu() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/use_gpu"); }
 	_FORCE_INLINE_ float _get_entropy_threshold() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/entropy_treshold"); }
@@ -154,6 +155,7 @@ private:
 	_FORCE_INLINE_ int _get_max_tokens() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/max_tokens"); }
 	void _load_model();
 	void _load_vad_model();
+	void _set_error(const String &p_message);
 	whisper_vad_params _get_silero_vad_params() const;
 	PackedFloat32Array _filter_speech_samples(PackedFloat32Array buffer);
 	std::vector<float> _add_audio_buffer(PackedVector2Array buffer);
@@ -200,6 +202,8 @@ public:
 	_FORCE_INLINE_ bool get_token_timestamps() const { return token_timestamps; }
 	void set_flash_attn(bool p_enable);
 	bool get_flash_attn();
+	_FORCE_INLINE_ String get_last_error() const { return last_error; }
+	_FORCE_INLINE_ void clear_last_error() { last_error = ""; }
 	SpeechToText();
 	~SpeechToText();
 };
