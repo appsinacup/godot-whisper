@@ -650,15 +650,24 @@ SpeechToText::~SpeechToText() {
 
 PackedFloat32Array SpeechToText::resample(PackedVector2Array buffer, SpeechToText::InterpolatorType interpolator_type) {
 	int64_t buffer_len = buffer.size();
+	const int source_sample_rate = std::max(1, (int)(AudioServer::get_singleton()->get_mix_rate() + 0.5f));
+	if (last_reported_resample_rate != source_sample_rate) {
+		if (source_sample_rate == WHISPER_SAMPLE_RATE) {
+			UtilityFunctions::print("Whisper resample: runtime mix rate is ", source_sample_rate, " Hz; copying samples.");
+		} else {
+			UtilityFunctions::print("Whisper resample: runtime mix rate ", source_sample_rate, " Hz -> Whisper ", WHISPER_SAMPLE_RATE, " Hz.");
+		}
+		last_reported_resample_rate = source_sample_rate;
+	}
 	float *buffer_float = (float *)memalloc(sizeof(float) * buffer_len);
-	uint32_t expected_size = buffer_len * WHISPER_SAMPLE_RATE / AudioServer::get_singleton()->get_mix_rate();
+	uint32_t expected_size = buffer_len * WHISPER_SAMPLE_RATE / source_sample_rate;
 	float *resampled_float = (float *)memalloc(sizeof(float) * expected_size);
 	_vector2_array_to_float_array(buffer_len, buffer.ptr(), buffer_float);
 	// Speaker frame.
 	uint32_t result_size = _resample_audio_buffer(
 			buffer_float, // Pointer to source buffer
 			buffer_len, // Size of source buffer * sizeof(float)
-			AudioServer::get_singleton()->get_mix_rate(), // Source sample rate
+			source_sample_rate, // Source sample rate
 			WHISPER_SAMPLE_RATE, // Target sample rate
 			resampled_float,
 			interpolator_type);

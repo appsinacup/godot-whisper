@@ -111,6 +111,7 @@ func _start_recording() -> void:
 		return
 	thread = Thread.new()
 	_configure_capture_buffer()
+	_log_audio_rate_info()
 	_effect_capture.clear_buffer()
 	_pending_frames.clear()
 	_last_input_frame_msec = Time.get_ticks_msec()
@@ -138,6 +139,34 @@ func set_input_device_name(device_name: String) -> void:
 
 func show_status(message: String, is_error: bool = false) -> void:
 	_report_status(message, is_error)
+
+
+func _log_audio_rate_info() -> void:
+	var runtime_mix_rate := max(int(AudioServer.get_mix_rate()), 1)
+	var project_mix_rate := int(ProjectSettings.get_setting("audio/driver/mix_rate", runtime_mix_rate))
+	var target_mix_rate := int(SpeechToText.SPEECH_SETTING_SAMPLE_RATE)
+	var resample_status := "copying captured samples"
+	if runtime_mix_rate != target_mix_rate:
+		resample_status = "resampling captured samples"
+	print(
+		"Whisper audio rates: project audio/driver/mix_rate=",
+		project_mix_rate,
+		" Hz, runtime AudioServer.get_mix_rate()=",
+		runtime_mix_rate,
+		" Hz, Whisper target=",
+		target_mix_rate,
+		" Hz; ",
+		resample_status,
+		"."
+	)
+	if project_mix_rate != runtime_mix_rate:
+		push_warning(
+			"Project audio/driver/mix_rate is "
+			+ str(project_mix_rate)
+			+ " Hz, but runtime AudioServer.get_mix_rate() is "
+			+ str(runtime_mix_rate)
+			+ " Hz. Realtime capture uses runtime mix rate for chunk timing."
+		)
 
 
 func restart_recording() -> void:
@@ -226,7 +255,7 @@ func transcribe_thread() -> void:
 
 
 func _collect_step_frames() -> PackedVector2Array:
-	var mix_rate: int = ProjectSettings.get_setting("audio/driver/mix_rate")
+	var mix_rate := max(int(AudioServer.get_mix_rate()), 1)
 	var step_frames := int(float(max(step_ms, 1)) * mix_rate / 1000.0)
 	var max_chunk_ms := max(step_ms, length_ms - keep_ms)
 	var max_chunk_frames := int(float(max(max_chunk_ms, 1)) * mix_rate / 1000.0)

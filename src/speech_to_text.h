@@ -147,6 +147,7 @@ private:
 	bool token_timestamps = true;
 	bool flash_attn = true;
 	String last_error;
+	int last_reported_resample_rate = -1;
 
 	_FORCE_INLINE_ bool _is_use_gpu() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/use_gpu"); }
 	_FORCE_INLINE_ float _get_entropy_threshold() { return ProjectSettings::get_singleton()->get("audio/input/transcribe/entropy_treshold"); }
