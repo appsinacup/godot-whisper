@@ -80,7 +80,9 @@ Go to Project -> Project Settings -> General -> Audio -> Input (Check Advance Se
 
 You will see a bunch of settings there.
 
-Also, as doing microphone transcribing requires the data to be at a 16000 sampling rate, you can change the audio driver mix rate to 16000: `audio/driver/mix_rate`. This way the resampling won't need to do any work, winning you some valuable 50-100ms for larger audio, but at the price of audio quality.
+Microphone transcription feeds Whisper at 16000 Hz. The addon resamples captured audio from the actual runtime mix rate reported by `AudioServer.get_mix_rate()`.
+
+Optional: set Project Settings -> Audio -> Driver -> Mix Rate (`audio/driver/mix_rate`) to 16000 to avoid resampling overhead. This may reduce overall game audio quality, so only use it if speech transcription is the main audio workload. Godot may still use a different runtime mix rate on some platforms or devices; verify with `AudioServer.get_mix_rate()`. If the runtime mix rate is not 16000, the addon will resample.
 
 ## Star History
 
