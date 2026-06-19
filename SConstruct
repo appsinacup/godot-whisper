@@ -519,9 +519,10 @@ else:
         os.makedirs(vulkan_gen_dir, exist_ok=True)
         os.makedirs(vulkan_spv_dir, exist_ok=True)
 
-        # Build the shader gen tool with host compiler
-        _host_cxx = os.environ.get("HOST_CXX", "c++" if sys.platform != "win32" else "cl.exe")
-        if sys.platform == "win32":
+        # Build the shader gen tool with the same host compiler family SCons selected.
+        _host_cxx = os.environ.get("HOST_CXX", env.subst("$CXX") or "c++")
+        _host_cxx_name = os.path.basename(str(_host_cxx).strip('"')).lower()
+        if _host_cxx_name in ["cl", "cl.exe"]:
             _host_compile_cmd = "{} /std:c++17 /O2 /EHsc $SOURCE /Fe$TARGET".format(_host_cxx)
         else:
             _host_compile_cmd = "{} -std=c++17 -O2 -pthread $SOURCE -o $TARGET".format(_host_cxx)
@@ -533,9 +534,9 @@ else:
         )
 
         # On Windows, CMD needs ".\gen\..." to run local executables.
-        # On Unix, "./" prefix is needed.  Use os.sep for the path separator.
+        # On Unix, "./" prefix is needed.
         if sys.platform == "win32":
-            _tool_cmd = vulkan_gen_tool_bin.replace("/", "\\\\")
+            _tool_cmd = ".\\" + vulkan_gen_tool_bin.replace("/", "\\")
         else:
             _tool_cmd = "./" + vulkan_gen_tool_bin
 
