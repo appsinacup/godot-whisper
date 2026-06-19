@@ -206,13 +206,27 @@ if _sgemm_orig in _sgemm_txt:
     with open(_sgemm_path, "w") as f:
         f.write(_sgemm_txt)
 
+# Some MinGW Windows SDK headers define _WIN32_WINNT high enough for
+# SetThreadInformation but do not expose thread power throttling symbols.
+_ggml_cpu_path = cpu_dir + "/ggml-cpu.c"
+with open(_ggml_cpu_path, "r") as f:
+    _ggml_cpu_txt = f.read()
+_ggml_cpu_orig = "#if _WIN32_WINNT >= 0x0602\n        THREAD_POWER_THROTTLING_STATE t;"
+if _ggml_cpu_orig in _ggml_cpu_txt:
+    _ggml_cpu_txt = _ggml_cpu_txt.replace(
+        _ggml_cpu_orig,
+        "#if _WIN32_WINNT >= 0x0602 && defined(THREAD_POWER_THROTTLING_CURRENT_VERSION) && defined(THREAD_POWER_THROTTLING_EXECUTION_SPEED)\n"
+        "        THREAD_POWER_THROTTLING_STATE t;")
+    with open(_ggml_cpu_path, "w") as f:
+        f.write(_ggml_cpu_txt)
+
 # ── whisper.cpp library itself ────────────────────────────────────────────────
 sources.append(whisper_dir + "/src/whisper.cpp")
 
 # ── Disable narrowing warning (Clang) ─────────────────────────────────────────
 # whisper.cpp/ggml has narrowing conversions that break on 32-bit (size_t = u32)
 if not env.get("is_msvc", False):
-    env.Append(CCFLAGS=["-Wno-c++11-narrowing"])
+    env.Append(CXXFLAGS=["-Wno-c++11-narrowing"])
 
 # ── Platform-specific backends ────────────────────────────────────────────────
 if env["platform"] in ["macos", "ios"]:
