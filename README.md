@@ -51,9 +51,9 @@
 
 Go to a [Github Release](https://github.com/appsinacup/godot-whisper/releases), copy paste the addons folder to the samples folder.
 
-### Godot Assets
+### Godot Asset Store
 
-Download directly from [Godot Asset Library](https://godotengine.org/asset-library/asset/2638).
+Download directly from [Godot Asset Store](https://store.godotengine.org/asset/appsinacup/godot-whisper-speech-to-text-stt-offline/).
 
 **Afterwards**:
 
