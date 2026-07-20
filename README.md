@@ -45,44 +45,9 @@
 
 [![Godot Whisper](https://img.youtube.com/vi/fAgjNkfBOKs/0.jpg)](https://www.youtube.com/watch?v=fAgjNkfBOKs&t=10s)
 
-## How to install
+## How to get started
 
-### GitHub Release
-
-Go to a [Github Release](https://github.com/appsinacup/godot-whisper/releases), copy paste the addons folder to the samples folder.
-
-### Godot Asset Store
-
-Download directly from [Godot Asset Store](https://store.godotengine.org/asset/appsinacup/godot-whisper-speech-to-text-stt-offline/).
-
-**Afterwards**:
-
-Activate the extension in Project -> Project Settings -> Godot Whisper. Restart the Godot editor.
-
-### Models
-
-Models manual download link: [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
-
-| Model | Size |
-|-------|--------|
-| **tiny** | 78 MB |
-| **base** | 148 MB |
-| **small** | 244M |
-| **medium** | 769M |
-| **large-v1** | 1550M |
-| **large-v2** | 1550M |
-| **large-v3** | 1550M |
-| **large-v3-turbo** | 809M |
-
-## Global settings
-
-Go to Project -> Project Settings -> General -> Audio -> Input (Check Advance Settings).
-
-You will see a bunch of settings there.
-
-Microphone transcription feeds Whisper at 16000 Hz. The addon resamples captured audio from the actual runtime mix rate reported by `AudioServer.get_mix_rate()`.
-
-Optional: set Project Settings -> Audio -> Driver -> Mix Rate (`audio/driver/mix_rate`) to 16000 to avoid resampling overhead. This may reduce overall game audio quality, so only use it if speech transcription is the main audio workload. Godot may still use a different runtime mix rate on some platforms or devices; verify with `AudioServer.get_mix_rate()`. If the runtime mix rate is not 16000, the addon will resample.
+Go to the [Documentation](https://whisper.appsinacup.com) website.
 
 ## Star History
 
