@@ -32,6 +32,8 @@ linux.debug.x86_64 = "bin/libgodot_whisper.linux.template_release.x86_64.so"
 linux.release.x86_64 = "bin/libgodot_whisper.linux.template_release.x86_64.so"
 linux.debug.double.x86_64 = "bin/libgodot_whisper.linux.template_release.double.x86_64.so"
 linux.release.double.x86_64 = "bin/libgodot_whisper.linux.template_release.double.x86_64.so"
+linux.debug.arm64 = "bin/libgodot_whisper.linux.template_debug.arm64.so"
+linux.release.arm64 = ""bin/libgodot_whisper.linux.template_release.arm64.so"
 
 android.debug.x86_64 = "bin/libgodot_whisper.android.template_release.x86_64.so"
 android.release.x86_64 = "bin/libgodot_whisper.android.template_release.x86_64.so"
